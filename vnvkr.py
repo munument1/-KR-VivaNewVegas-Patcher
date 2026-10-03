@@ -17,7 +17,7 @@ import tempfile
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 
-VERSION = "0.0.1"
+VERSION = "1.0.0"
 ROOT = Path(__file__).resolve().parent
 RESERVED = {"meta.ini", ".vnv-kr-report.json"}
 HASH = re.compile(r"[0-9a-f]{64}\Z")
@@ -352,14 +352,14 @@ def apply_bundle(installation: Installation, bundle: Path, output: Path, executa
                   "inventory_warnings": installation.warnings,
                   "manifest_sha256": sha256(bundle / "manifest.json")}
         write_json(stage / ".vnv-kr-report.json", report)
-        (stage / "meta.ini").write_text("[General]\nversion=0.0.1\ncomments=VNV Korean translation delta overlay\n", encoding="utf-8")
+        (stage / "meta.ini").write_text(f"[General]\nversion={VERSION}\ncomments=VNV Korean translation delta overlay\n", encoding="utf-8")
         installation.guard_output(output)
         stage.rename(output)
     return report
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description="VNV 한국어 번역 차분 패쳐 (개발 초기판)")
+    parser = argparse.ArgumentParser(description="VNV 한국어 번역 패쳐")
     parser.add_argument("command", choices=("inventory", "build", "check", "apply"))
     parser.add_argument("--mo2-root", required=True, type=Path)
     parser.add_argument("--profile")
