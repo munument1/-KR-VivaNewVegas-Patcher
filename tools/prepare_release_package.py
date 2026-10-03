@@ -25,6 +25,7 @@ def main():
         (root/'.tools/yesman-node-utf8/node.exe',backend/'node.exe'),
         (root/'.tools/yesman-node-1252/node.exe',backend/'node-1252.exe'),
         (root/'.tools/xdelta3-3.2.0-windows-x86_64/xdelta3.exe',backend/'xdelta3.exe'),
+        (root/'.tools/xdelta3-3.2.0-windows-x86_64/README.md',backend/'xdelta-README.md'),
         (root/'tools/yesman_text.cjs',backend/'yesman_text.cjs'),
         (root/'.tools/yesman-node-utf8/NODE_LICENSE.txt',backend/'NODE_LICENSE.txt'),
         (root/'tools/xdelta_source.json',backend/'xdelta_source.json')]
