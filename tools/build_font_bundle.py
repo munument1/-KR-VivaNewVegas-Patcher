@@ -9,6 +9,7 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import vnvkr
+import vnvkr_fonts
 
 
 def main():
@@ -88,15 +89,27 @@ def main():
         container.append(slot42)
         ET.indent(xml, space='  ')
         xml_entry = store('tnvse_fonts.xml', ET.tostring(xml.getroot(), encoding='utf-8', xml_declaration=True))
-        ini_entry = store('tnvse.ini', (desktop / 'tnvse.ini').read_bytes())
+        ini_overrides = {'FreeTypeFont': {'bEnableFreeTypeFontRendering': '1',
+                                          'bEnableFreeTypeFontRenderingLog': '0'},
+                         'Multibyte': {'bEnableMultibyteFontHook': '1', 'uiEncoding': '4', 'bUTF8': '1'},
+                         'Dictionary': {'bEnableDictionaryTranslation': '0',
+                                        'bDisableDictionaryTranslationInConsole': '0',
+                                        'bEnableDictionaryTranslationLog': '0',
+                                        'bEnableMuxQuestPromptTranslation': '0',
+                                        'bEnableDictionaryPerkDescriptionTranslation': '0',
+                                        'bEnableDictionaryItemEffectTranslation': '0',
+                                        'bEnableDictionaryMultiplierTextTranslation': '0',
+                                        'bEnableDictionaryWildcardTranslation': '0',
+                                        'bEnableDictionaryRegexTranslation': '0',
+                                        'bEnableDictionaryMixedSourceTranslation': '0',
+                                        'bEnableDictionaryBeforeLinebreakTranslation': '0',
+                                        'bEnableDictionaryShrinkFuzzyTranslation': '0',
+                                        'bEnableDictionaryTrimBypassFuzzyTranslation': '0'}}
+        ini_text = (desktop / 'tnvse.ini').read_text(encoding='utf-8')
+        ini_entry = store('tnvse.ini', vnvkr_fonts.merge_ini(ini_text, ini_overrides).encode('utf-8'))
         metadata = vnvkr.read_json(stage / 'catalog.json')
         metadata['font_bundle'] = {'default_mod': 'VNV Korean Fonts - tNVSE', 'ini': ini_entry,
-            'xml': xml_entry, 'assets': assets,
-            'ini_overrides': {'FreeTypeFont': {'bEnableFreeTypeFontRendering': '1',
-                                               'bEnableFreeTypeFontRenderingLog': '0'},
-                              'Multibyte': {'bEnableMultibyteFontHook': '1', 'uiEncoding': '4', 'bUTF8': '1'},
-                              'Dictionary': {'bEnableDictionaryTranslation': '0',
-                                             'bEnableDictionaryTranslationLog': '0'}}}
+            'xml': xml_entry, 'assets': assets, 'ini_overrides': ini_overrides}
         vnvkr.write_json(stage / 'catalog.json', metadata)
         stage.rename(args.output)
     print(f'Font catalog prepared: {args.output}')

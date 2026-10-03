@@ -387,6 +387,10 @@ def build_output(installation, catalog_dir, output):
                                                     report.get('fonts', {}).get('mod'))
             report['files'].extend(asset_files)
             report['assets'] = asset_status
+        if catalog.get('runtime_mods'):
+            runtime_files, runtime_status = build_runtime_mods(installation, catalog_dir, catalog['runtime_mods'], stage, seen)
+            report['files'].extend(runtime_files)
+            report['runtime_mods'] = runtime_status
         if not report['files']:
             raise ValueError('No applicable translation files; no Output was published')
         # Read back every artifact before publishing the tree.
@@ -396,6 +400,37 @@ def build_output(installation, catalog_dir, output):
         stage.rename(output)
     vnvkr.write_json(report_path, report)
     return report
+
+
+def build_runtime_mods(installation, catalog_dir, specs, stage, seen):
+    """Publish small Korean runtime mods that do not replace existing VNV providers."""
+    files, activate_mods, activate_plugins = [], set(), set()
+    for spec in specs:
+        mod = vnvkr.virtual_path(spec['mod'])
+        if '/' in mod:
+            raise ValueError('Invalid runtime mod folder')
+        if mod not in installation.mods_enabled:
+            activate_mods.add(mod)
+        for plugin in spec.get('plugins', []):
+            activate_plugins.add(vnvkr.virtual_path(plugin))
+        for entry in spec['files']:
+            relative = vnvkr.virtual_path(entry['path'])
+            payload = vnvkr.contained(catalog_dir, entry['payload'])
+            if vnvkr.sha256(payload) != entry['payload_sha256']:
+                raise ValueError(f'Runtime payload integrity mismatch: {mod}/{relative}')
+            output_path = f'mods/{mod}/{relative}'
+            if output_path.casefold() in seen:
+                raise ValueError(f'Duplicate runtime output: {output_path}')
+            seen.add(output_path.casefold())
+            target = vnvkr.contained(stage, output_path)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(payload, target)
+            files.append({'path': relative, 'output_path': output_path, 'provider': mod,
+                          'source_sha256': None, 'output_sha256': vnvkr.sha256(target),
+                          'status': 'runtime_mod_copy'})
+    return files, {'mods_requiring_activation': sorted(activate_mods),
+                   'plugins_requiring_activation': sorted(activate_plugins),
+                   'game_validation': 'not_run'}
 
 
 def build_assets(installation, catalog_dir, spec, stage, seen, fallback_provider=None):

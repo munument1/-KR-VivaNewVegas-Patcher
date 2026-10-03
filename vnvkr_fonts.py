@@ -132,12 +132,15 @@ def build_fonts(installation, catalog_dir, spec, stage, seen):
         chain = installation.providers.get(config_path.casefold())
         source = Path(chain[-1]['physical']) if chain else None
         before = vnvkr.sha256(source) if source else None
-        baseline = source or payload(catalog_dir, entry)
-        payload(catalog_dir, entry)
+        bundled = payload(catalog_dir, entry)
         if kind == 'font_ini_merged':
-            text, encoding = decode(baseline)
+            # The Korean tNVSE INI is a complete, tested configuration. Do not
+            # inherit unrelated renderer/input settings from an installed default
+            # config; only reuse its provider/output location.
+            text, encoding = decode(bundled)
             raw = merge_ini(text, spec['ini_overrides']).encode(encoding)
         else:
+            baseline = source or bundled
             raw = merge_xml(baseline.read_bytes(), planned)
         if source and source.resolve().is_relative_to(installation.root):
             relative = source.resolve().relative_to(installation.root).as_posix()

@@ -57,9 +57,9 @@ class FontOutputTests(unittest.TestCase):
         out = self.root / 'Output'
         report = vnvkr_output.build_output(vnvkr.Installation(self.mo2), self.catalog, out)
         merged_ini = (out / 'mods/Installed tNVSE/NVSE/plugins/tnvse.ini').read_text()
-        self.assertIn('bEnableFreeTypeFontRendering=1 ; note', merged_ini)
-        self.assertIn('uiFreeTypeFontMemoryCacheMB=256', merged_ini)
-        self.assertIn('addedOption=keep', merged_ini)
+        self.assertIn('bEnableFreeTypeFontRendering=1', merged_ini)
+        self.assertNotIn('uiFreeTypeFontMemoryCacheMB=256', merged_ini)
+        self.assertNotIn('addedOption=keep', merged_ini)
         self.assertIn('uiEncoding = 4', merged_ini)
         merged_xml = ET.parse(out / 'mods/Installed tNVSE/NVSE/plugins/tnvse_fonts.xml').getroot()
         self.assertEqual(merged_xml.find('Future').get('value'), 'keep')

@@ -4,11 +4,11 @@ Viva New Vegas(VNV)용 한국어 Output 생성기입니다. 사용자가 VNV MO2
 
 ## 현재 상태
 
-2026-10-03 기준 릴리즈 카탈로그에는 활성 플러그인 37개와 비활성 선택 변형 3개, 총 40개 플러그인의 검증된 번역 경로가 들어 있습니다. 40개 모두 UTF-8 fresh readback과 CP1252 legacy readback을 통과한 결과를 기반으로 xdelta3 빠른 패치를 제공합니다.
+2026-10-04 기준 릴리즈 카탈로그에는 활성 플러그인 37개와 비활성 선택 변형 3개, 총 40개 플러그인의 검증된 번역 경로가 들어 있습니다. 40개 모두 UTF-8 fresh readback과 CP1252 legacy readback을 통과한 결과를 기반으로 xdelta3 빠른 패치를 제공합니다.
 
-현재 테스트 VNV 설치에서 일반 사용자 경로는 69개 출력 파일을 약 12.5초에 생성했습니다. 패키징된 `VNVKoreanPatcher.exe`의 self-test도 실제 TranslationData/xdelta를 사용해 Output을 만들고 ExitCode 0으로 통과했습니다. 자동 테스트는 35/35 통과 상태입니다.
+현재 테스트 VNV 설치에서 최종 Output은 76개 파일, 제외 0개로 생성됐고 40개 플러그인 모두 `exact_source_verified_delta` 빠른 경로를 통과했습니다. 패키징된 `VNVKoreanPatcher.exe`의 self-test도 실제 TranslationData/xdelta를 사용해 Output을 만들고 ExitCode 0으로 통과했습니다. 자동 테스트는 37/37 통과 상태입니다.
 
-게임 내 실제 플레이 검증은 별도 단계입니다. KR-RADIO는 현행 VNV와 겹치는 compiled script block 19개가 있어 기존 Radio ESP를 그대로 포함하지 않으며, 별도 호환 ESP 작업 대상으로 남겨 두었습니다.
+라디오 표시 문자열은 `VNVKR UI Strings.esp`에 통합했고, 라디오 자막은 UTF-8 문자열을 그대로 보존하도록 수정한 `MojaveRadioCaptions.dll`을 함께 제공합니다. 로딩 스크린 메시지, UI GMST, Radio INFO 문자열도 같은 UI Strings 플러그인에 포함됩니다.
 
 ## 사용 방법
 
@@ -17,6 +17,7 @@ Viva New Vegas(VNV)용 한국어 Output 생성기입니다. 사용자가 VNV MO2
 3. `ModOrganizer.ini`가 있는 VNV MO2 폴더를 선택합니다.
 4. **Output 생성**을 누릅니다.
 5. 생성된 `Output\mods`의 내용을 VNV MO2 폴더의 `mods`에 복사합니다.
+6. MO2에서 새로 생성된 `VNV Korean UI Strings`, `VNV Korean Radio Captions` 모드를 활성화하고, 플러그인 목록에서 `VNVKR UI Strings.esp`도 체크합니다.
 
 패쳐는 tNVSE DLL을 배포하지 않습니다. 한국어용 `tnvse.ini`, `tnvse_fonts.xml`, Pretendard Bold / NanumSquare ExtraBold / TmonMonsori / NeoDunggeunmo Pro 폰트와 필요한 라이선스 고지, MCM/INI 번역 및 번역 텍스처를 Output에 포함합니다. 한국어 설정은 `uiEncoding=4`, `bUTF8=1`이며 런타임 Dictionary 번역은 중복 번역을 피하기 위해 비활성화합니다. Stewie 계열용 font slot 42도 포함합니다.
 
@@ -32,7 +33,7 @@ CP1252 처리는 최종 게임 인코딩을 CP1252로 만들기 위한 것이 �
 
 ```powershell
 py -3 -m unittest discover -s tests -q
-py -3 vnvkr_output.py output --mo2-root "C:\Modlists\VNV" --profile "Viva New Vegas Extended" --catalog bundles/records-release-20261003 --output Output
+py -3 vnvkr_output.py output --mo2-root "C:\Modlists\VNV" --profile "Viva New Vegas Extended" --catalog bundles/records-release-20261004 --output Output
 ```
 
 릴리즈 제작용 주요 도구는 `tools/build_font_bundle.py`, `tools/add_verified_deltas.py`, `tools/verify_optional_variants.py`, `tools/add_optional_verified_deltas.py`, `tools/prepare_release_package.py`입니다. 생성 데이터와 대형 바이너리는 `.gitignore`에 의해 Git 소스 저장소에서 제외됩니다.

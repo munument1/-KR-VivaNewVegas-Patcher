@@ -93,10 +93,15 @@ class App:
                 activation = (f'\nMO2에서 "{fonts["mod"]}" 모드를 체크하고 tNVSE보다 아래에 배치해주세요.'
                               if fonts.get('requires_activation') else '')
                 extra = set(report.get('assets', {}).get('mods_requiring_activation', []))
+                runtime = report.get('runtime_mods', {})
+                extra.update(runtime.get('mods_requiring_activation', []))
                 if fonts.get('requires_activation'):
                     extra.discard(fonts['mod'])
                 if extra:
                     activation += '\nMO2에서 다음 번역 모드도 체크해주세요: ' + ', '.join(sorted(extra))
+                plugins = runtime.get('plugins_requiring_activation', [])
+                if plugins:
+                    activation += '\nMO2 플러그인 목록에서 다음 ESP도 체크해주세요: ' + ', '.join(plugins)
                 self.status.set(f"{len(report['files'])}개 파일 생성 완료 · 미대응 항목 {unmatched}개 · 제외 파일 {len(report['skipped'])}개\n"
                                 f"{self.output}\nOutput 안의 mods 폴더를 선택한 MO2 폴더로 복사해주세요.{activation}")
                 self.open_button.configure(state='normal')
