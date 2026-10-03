@@ -1,0 +1,10 @@
+{
+  "version": "3.2.0",
+  "source": "https://github.com/jmacd/xdelta/releases/tag/v3.2.0",
+  "url": "https://github.com/jmacd/xdelta/releases/download/v3.2.0/xdelta3-3.2.0-windows-x86_64.zip",
+  "archive_sha256": "8aca331c3d49ec4465ee8f3f7e3afb92e06d36e32fdec422c3252aaa813a7d2a",
+  "executable_sha256": "6e812b38484d0c764291779fadee83ffbe2eceaccb4e3a21f8a043a02654a01e",
+  "license": "Apache-2.0",
+  "checked_on": "2026-10-03",
+  "digest_source": "GitHub release asset API digest"
+}
