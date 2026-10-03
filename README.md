@@ -6,20 +6,252 @@ Viva New Vegas(VNV)용 한국어 Output 생성기입니다. 사용자가 VNV MO2
 
 2026-10-04 기준 릴리즈 카탈로그에는 활성 플러그인 37개와 비활성 선택 변형 3개, 총 40개 플러그인의 검증된 번역 경로가 들어 있습니다. 40개 모두 UTF-8 fresh readback과 CP1252 legacy readback을 통과한 결과를 기반으로 xdelta3 빠른 패치를 제공합니다.
 
-현재 테스트 VNV 설치에서 최종 Output은 76개 파일, 제외 0개로 생성됐고 40개 플러그인 모두 `exact_source_verified_delta` 빠른 경로를 통과했습니다. 패키징된 `VNVKoreanPatcher.exe`의 self-test도 실제 TranslationData/xdelta를 사용해 Output을 만들고 ExitCode 0으로 통과했습니다. 자동 테스트는 37/37 통과 상태입니다.
+현재 테스트 VNV 설치에서 최종 Output은 74개 파일, 제외 0개로 생성됐고 40개 플러그인 모두 `exact_source_verified_delta` 빠른 경로를 통과했습니다. 패키징된 `VNVKoreanPatcher.exe`의 self-test도 실제 TranslationData/xdelta를 사용해 Output을 만들도록 구성되어 있습니다. 자동 테스트는 37/37 통과 상태입니다.
 
 라디오 표시 문자열은 `VNVKR UI Strings.esp`에 통합했고, 라디오 자막은 UTF-8 문자열을 그대로 보존하도록 수정한 `MojaveRadioCaptions.dll`을 함께 제공합니다. 로딩 스크린 메시지, UI GMST, Radio INFO 문자열도 같은 UI Strings 플러그인에 포함됩니다.
 
-## 사용 방법
+## 설치 전 준비
 
-1. tNVSE 71 이상과 VNV를 준비합니다.
-2. `VNVKoreanPatcher.exe`를 실행합니다.
-3. `ModOrganizer.ini`가 있는 VNV MO2 폴더를 선택합니다.
-4. **Output 생성**을 누릅니다.
-5. 생성된 `Output\mods`의 내용을 VNV MO2 폴더의 `mods`에 복사합니다.
-6. MO2에서 새로 생성된 `VNV Korean UI Strings`, `VNV Korean Radio Captions` 모드를 활성화하고, 플러그인 목록에서 `VNVKR UI Strings.esp`도 체크합니다.
+다음이 먼저 준비되어 있어야 합니다.
 
-패쳐는 tNVSE DLL을 배포하지 않습니다. 한국어용 `tnvse.ini`, `tnvse_fonts.xml`, Pretendard Bold / NanumSquare ExtraBold / TmonMonsori / NeoDunggeunmo Pro 폰트와 필요한 라이선스 고지, MCM/INI 번역 및 번역 텍스처를 Output에 포함합니다. 한국어 설정은 `uiEncoding=4`, `bUTF8=1`이며 런타임 Dictionary 번역은 중복 번역을 피하기 위해 비활성화합니다. Stewie 계열용 font slot 42도 포함합니다.
+- 정상 설치된 **Viva New Vegas**
+- **Mod Organizer 2(MO2)** 기반 VNV 설치
+- **tNVSE 71 이상**
+- VNV에서 사용하는 **UIO(User Interface Organizer)** 구성
+- 게임과 MO2를 완전히 종료한 상태
+
+패쳐는 tNVSE DLL 자체를 배포하지 않습니다. 기존 VNV 설치에 tNVSE가 정상 동작하는 상태에서 사용하는 것을 전제로 합니다.
+
+가능하면 설치 전 MO2 폴더를 백업하거나, 최소한 현재 프로필과 중요한 사용자 설정을 백업하는 것을 권장합니다.
+
+## 설치 방법
+
+### 1. 릴리즈 파일 받기
+
+GitHub Releases에서 최신 `VNVKoreanPatcher-YYYYMMDD.zip`을 받은 뒤 원하는 폴더에 압축을 풉니다.
+
+압축 안에는 대략 다음과 같은 구조가 있습니다.
+
+```text
+VNVKoreanPatcher/
+├─ VNVKoreanPatcher.exe
+├─ TranslationData/
+└─ Backend/
+```
+
+`TranslationData`와 `Backend` 폴더는 EXE 옆에 그대로 있어야 합니다. 파일만 따로 빼서 실행하지 마세요.
+
+### 2. 패쳐 실행
+
+`VNVKoreanPatcher.exe`를 실행합니다.
+
+패쳐에서 **VNV의 MO2 루트 폴더**를 지정합니다.
+
+예시:
+
+```text
+C:\Modlists\VNV
+```
+
+올바른 폴더라면 그 안에 보통 다음 항목이 보입니다.
+
+```text
+ModOrganizer.exe
+ModOrganizer.ini
+mods/
+profiles/
+overwrite/
+```
+
+게임 설치 폴더인 아래 경로를 선택하는 것이 아닙니다.
+
+```text
+C:\Games\Steam\steamapps\common\Fallout New Vegas
+```
+
+즉 **게임 폴더가 아니라 VNV의 MO2 폴더를 선택**해야 합니다.
+
+### 3. Output 생성
+
+패쳐에서 **Output 생성**을 누릅니다.
+
+패쳐는 현재 VNV 프로필과 설치된 파일을 읽어서 별도의 `Output` 폴더를 만듭니다. 이 단계에서는 VNV 원본을 직접 수정하지 않습니다.
+
+정상적인 VNV 버전이라면 검증된 플러그인은 xdelta3 빠른 경로를 사용합니다. VNV 업데이트 등으로 원본 해시가 달라진 경우에는 가능한 레코드만 YesMan-AI/xEditLib 경로로 병합합니다.
+
+### 4. Output을 VNV에 복사
+
+생성이 끝나면 Output 안의 **`mods` 폴더 내용**을 VNV MO2 루트의 `mods` 폴더에 복사합니다.
+
+예를 들어:
+
+```text
+생성된 Output
+└─ mods
+   ├─ Fixed ESMs
+   ├─ YUP - Base Game and All DLC
+   ├─ Goodies
+   ├─ tNVSE Default Config
+   ├─ VNV Korean UI Strings
+   ├─ VNV Korean Radio Captions
+   └─ ...
+
+↓
+
+C:\Modlists\VNV\mods\
+```
+
+중요한 점은 **`Output\mods` 폴더 자체를 `mods` 안에 한 번 더 넣는 것이 아니라**, 그 안에 있는 각 모드 폴더를 기존 `C:\Modlists\VNV\mods\`에 합치는 것입니다.
+
+Windows에서 기존 파일을 바꿀지 물어보면 **덮어쓰기/교체**를 선택합니다. 번역 플러그인과 MCM/Translations, tNVSE 설정이 기존 VNV 모드 폴더에 들어가야 하기 때문입니다.
+
+패쳐가 만드는 Output은 현재 VNV의 모드 폴더 구조를 그대로 따라갑니다. 따라서 `FalloutNV.esm`, YUP, Goodies 등은 별도의 “한글패치 모드” 하나에 몰아넣는 방식이 아니라 **각 원래 VNV 모드 폴더의 번역본으로 교체**됩니다.
+
+### 5. MO2에서 새 모드 활성화
+
+MO2를 실행하고 왼쪽 모드 목록에서 다음 두 모드가 생성됐는지 확인합니다.
+
+- **VNV Korean UI Strings**
+- **VNV Korean Radio Captions**
+
+둘 다 체크해서 활성화합니다.
+
+`VNV Korean Radio Captions`는 NVSE DLL/UI 파일 모드라 별도 ESP가 없습니다.
+
+### 6. VNVKR UI Strings.esp 활성화
+
+MO2 오른쪽 **Plugins** 탭에서 다음 플러그인을 체크합니다.
+
+```text
+VNVKR UI Strings.esp
+```
+
+이 ESP에는 다음 종류의 한국어 문자열이 포함됩니다.
+
+- UI GMST
+- 로딩 스크린 메시지
+- 라디오 방송용 INFO 문자열
+- 라디오 자막에서 사용하는 표시 문자열
+
+YUP, Goodies, ExtraGoodies 등 필요한 마스터 뒤에 로드되어야 합니다. MO2가 마스터 의존성을 지키는 한 임의로 앞쪽으로 올리지 않는 것을 권장합니다.
+
+### 7. tNVSE 한국어 설정 확인
+
+Output은 기존 **tNVSE Default Config** 모드에 한국어용 설정을 반영합니다.
+
+주요 값은 다음과 같습니다.
+
+```ini
+bEnableFreeTypeNativeAtlas = 0
+bEnableFreeTypeFontCommandBuffer = 0
+uiFreeTypeFontDistanceFieldMode = 1
+uiReorderDoorPrompt = 2
+sOptionalStructuralParticle = ""
+bMultibyteInput = 1
+bEnableDictionaryTranslation = 0
+```
+
+또한 한국어 표시를 위해 다음 설정을 사용합니다.
+
+```ini
+uiEncoding = 4
+bUTF8 = 1
+```
+
+런타임 Dictionary 번역은 중복 번역을 막기 위해 비활성화합니다.
+
+폰트 구성에는 다음 계열이 포함됩니다.
+
+- Pretendard Bold
+- NanumSquare ExtraBold
+- TmonMonsori
+- NeoDunggeunmo Pro
+- font slot 1~8
+- Stewie 계열용 font slot 42
+
+기존 `tNVSE Default Config` 모드가 활성화되어 있었다면 그대로 활성화 상태를 유지하면 됩니다.
+
+### 8. 게임 실행 후 확인
+
+게임은 평소처럼 **MO2에서 실행**합니다.
+
+처음 테스트할 때는 다음 항목을 확인하는 것이 좋습니다.
+
+- 메인 UI와 Pip-Boy가 한글로 표시되는지
+- 일반 대사와 자막이 한글인지
+- 자막 앞 NPC/생물 이름이 한글인지
+- 문 상호작용 문구가 한글인지
+- 퀘스트 진행/완료 메시지가 한글인지
+- 로딩 스크린 메시지가 한글인지
+- 라디오 진행자 대사가 한글인지
+- 라디오 자막이 깨지지 않고 정상 한글로 표시되는지
+- MCM 메뉴와 각 모드의 Translations 파일이 한글로 적용되는지
+
+라디오 자막 DLL을 교체한 뒤에는 **게임을 완전히 종료하고 다시 실행**해야 합니다. 실행 중 DLL만 바꿔서는 새 버전이 로드되지 않습니다.
+
+## Output에 포함되는 항목
+
+현재 릴리즈 Output에는 다음이 포함됩니다.
+
+- VNV 관련 ESP/ESM 번역 40개
+- MCM/INI/JSON 번역
+- `MCM/Translations` 번역
+- 한국어 `tnvse.ini`
+- `tnvse_fonts.xml`
+- 한국어용 폰트
+- 번역 텍스처
+- `VNVKR UI Strings.esp`
+- `MojaveRadioCaptions.dll`
+- `MojaveRadioCaptions.ini`
+- Radio Captions HUD XML
+- UIO 등록 파일
+
+tNVSE 본체 DLL은 포함하지 않습니다.
+
+## 업데이트하거나 VNV를 다시 설치한 경우
+
+VNV가 업데이트되거나 일부 모드를 다시 설치하면 한국어로 교체했던 파일이 원본으로 돌아갈 수 있습니다.
+
+그 경우:
+
+1. 최신 패쳐 릴리즈를 받습니다.
+2. 현재 VNV MO2 폴더를 다시 지정합니다.
+3. Output을 새로 생성합니다.
+4. 새 Output의 `mods` 내용을 다시 VNV의 `mods`에 합칩니다.
+5. `VNV Korean UI Strings`, `VNV Korean Radio Captions`, `VNVKR UI Strings.esp`가 활성화되어 있는지 확인합니다.
+
+기존 Output을 계속 재사용하기보다 **현재 VNV 상태를 기준으로 다시 생성**하는 것을 권장합니다.
+
+## 문제 해결
+
+### 대부분 한글인데 일부 플러그인 내용만 영어로 나오는 경우
+
+Output의 번역 플러그인이 실제 VNV `mods` 폴더에 덮어써졌는지 확인하세요. 특히 다음과 같은 파일은 기존 VNV 모드 폴더 안의 번역본으로 교체되어야 합니다.
+
+```text
+Fixed ESMs\FalloutNV.esm
+YUP - Base Game and All DLC\YUP - Base Game + All DLC.esm
+Goodies\Goodies.esp
+Goodies\ExtraGoodies.esp
+```
+
+### UI는 한글인데 로딩 화면 또는 라디오가 영어인 경우
+
+다음을 확인하세요.
+
+- `VNV Korean UI Strings` 모드 활성화
+- `VNVKR UI Strings.esp` 활성화
+- `VNV Korean Radio Captions` 모드 활성화
+
+### 라디오 자막의 한글이 깨지는 경우
+
+최신 릴리즈의 `MojaveRadioCaptions.dll`을 사용하고 있는지 확인하세요. 현재 버전은 게임 문자열이 이미 유효한 UTF-8이면 그대로 사용하고, 레거시 문자열일 때만 CP1252 변환을 사용합니다.
+
+DLL 교체 뒤에는 반드시 게임을 완전히 종료한 뒤 다시 실행하세요.
+
+### 폰트가 깨지거나 한글 입력/표시가 이상한 경우
+
+`tNVSE Default Config\NVSE\plugins\tnvse.ini`가 Output의 버전으로 교체되었는지 확인하고, tNVSE가 71 이상인지 확인하세요.
 
 ## 플러그인 처리 방식
 
