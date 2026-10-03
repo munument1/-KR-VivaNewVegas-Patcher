@@ -14,10 +14,10 @@ Viva New Vegas(VNV)용 한국어 Output 생성기입니다. 사용자가 VNV MO2
 
 다음이 먼저 준비되어 있어야 합니다.
 
-- 정상 설치된 **Viva New Vegas**
-- **Mod Organizer 2(MO2)** 기반 VNV 설치
-- **tNVSE 71 이상**
-- VNV에서 사용하는 **UIO(User Interface Organizer)** 구성
+- 정상 설치된 **[Viva New Vegas](https://vivanewvegas.moddinglinked.com/intro.html)**
+- **[Mod Organizer 2(MO2)](https://github.com/ModOrganizer2/modorganizer/releases)** 기반 VNV 설치
+- **[tNVSE 71 이상](https://www.nexusmods.com/newvegas/mods/95088)**
+- VNV에서 사용하는 **[UIO(User Interface Organizer)](https://www.nexusmods.com/newvegas/mods/57174)** 구성
 - 게임과 MO2를 완전히 종료한 상태
 
 패쳐는 tNVSE DLL 자체를 배포하지 않습니다. 기존 VNV 설치에 tNVSE가 정상 동작하는 상태에서 사용하는 것을 전제로 합니다.
