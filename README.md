@@ -4,9 +4,9 @@ Viva New Vegas(VNV)용 한국어 Output 생성기입니다. 사용자가 VNV MO2
 
 ## 현재 상태
 
-2026-10-04 기준 릴리즈 카탈로그에는 활성 플러그인 37개와 비활성 선택 변형 3개, 총 40개 플러그인의 검증된 번역 경로가 들어 있습니다. 40개 모두 UTF-8 fresh readback과 CP1252 legacy readback을 통과한 결과를 기반으로 xdelta3 빠른 패치를 제공합니다.
+2026-10-04 기준 릴리즈 카탈로그에는 활성 플러그인 37개와 비활성 선택 변형 3개, 총 40개 플러그인의 검증된 번역 경로가 들어 있습니다. 40개 모두 UTF-8 fresh readback과 CP1252 legacy readback을 통과했습니다. v1.0.1부터는 패키지 용량을 줄이기 위해 130MB급 `FalloutNV.esm` xdelta를 제외하고 이 파일만 YesMan-AI/xEditLib 레코드 병합 경로를 사용하며, 나머지 39개는 xdelta3 빠른 패치를 유지합니다.
 
-현재 테스트 VNV 설치에서 최종 Output은 74개 파일, 제외 0개로 생성됐고 40개 플러그인 모두 `exact_source_verified_delta` 빠른 경로를 통과했습니다. 패키징된 `VNVKoreanPatcher.exe`의 self-test도 실제 TranslationData/xdelta를 사용해 Output을 만들도록 구성되어 있습니다. 자동 테스트는 37/37 통과 상태입니다.
+v1.0.0 테스트 VNV 설치에서는 최종 Output 74개 파일, 제외 0개와 40/40 `exact_source_verified_delta`를 확인했습니다. v1.0.1은 번역 데이터와 레코드 매핑은 그대로 유지하면서 `FalloutNV.esm`만 기존 검증된 YesMan-AI/xEditLib 병합 경로로 전환한 패키징 경량화 릴리즈입니다. 경량화 정책 테스트와 UTF-8/CP1252 Node 백엔드 로드 검증을 통과했습니다.
 
 라디오 표시 문자열은 `VNVKR UI Strings.esp`에 통합했고, 라디오 자막은 UTF-8 문자열을 그대로 보존하도록 수정한 `MojaveRadioCaptions.dll`을 함께 제공합니다. 로딩 스크린 메시지, UI GMST, Radio INFO 문자열도 같은 UI Strings 플러그인에 포함됩니다.
 
@@ -77,7 +77,7 @@ C:\Games\Steam\steamapps\common\Fallout New Vegas
 
 패쳐는 현재 VNV 프로필과 설치된 파일을 읽어서 별도의 `Output` 폴더를 만듭니다. 이 단계에서는 VNV 원본을 직접 수정하지 않습니다.
 
-정상적인 VNV 버전이라면 검증된 플러그인은 xdelta3 빠른 경로를 사용합니다. VNV 업데이트 등으로 원본 해시가 달라진 경우에는 가능한 레코드만 YesMan-AI/xEditLib 경로로 병합합니다.
+정상적인 VNV 버전에서는 대부분의 검증된 플러그인이 xdelta3 빠른 경로를 사용합니다. `FalloutNV.esm`은 v1.0.1부터 패키지 용량 절감을 위해 항상 YesMan-AI/xEditLib 레코드 병합 경로를 사용합니다. 다른 플러그인도 VNV 업데이트 등으로 원본 해시가 달라지면 같은 병합 경로로 전환합니다.
 
 ### 4. Output을 VNV에 복사
 
@@ -255,7 +255,7 @@ DLL 교체 뒤에는 반드시 게임을 완전히 종료한 뒤 다시 실행�
 
 ## 플러그인 처리 방식
 
-원본 SHA-256이 릴리즈 시 검증한 버전과 같으면 xdelta3 빠른 경로를 사용합니다. 복원된 ESP/ESM의 크기와 SHA-256을 다시 검사하므로 다른 바이트가 만들어지면 실패합니다.
+원본 SHA-256이 릴리즈 시 검증한 버전과 같으면 원칙적으로 xdelta3 빠른 경로를 사용합니다. 단, v1.0.1부터 `FalloutNV.esm`은 130MB급 delta를 배포하지 않고 레코드 병합 경로를 사용합니다. xdelta를 사용하는 플러그인은 복원된 ESP/ESM의 크기와 SHA-256을 다시 검사하므로 다른 바이트가 만들어지면 실패합니다.
 
 VNV 업데이트 등으로 원본 해시가 달라진 플러그인은 YesMan-AI/xEditLib 레코드 병합 경로로 전환합니다. FormID/소유자/필드/현재 원문이 대응되는 번역만 적용하고 새 문구나 변경된 문구는 영어로 유지합니다. 개발용 정밀 검증에서는 전체 레코드와 헤더를 새 세션에서 다시 읽으며, xEdit 저장 시 TES4 ONAM의 순서만 재정렬되는 경우에는 구성원 집합이 동일한지 비교합니다.
 
