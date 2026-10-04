@@ -7,6 +7,53 @@ import shutil
 
 import vnvkr
 
+MAX_PACKAGED_DELTA_BYTES = 16 * 1024 * 1024
+
+
+def strip_oversized_verified_deltas(data: Path, limit: int = MAX_PACKAGED_DELTA_BYTES):
+    """Keep record mappings but omit deltas that make the release needlessly huge."""
+    catalog_path = data / 'catalog.json'
+    catalog = vnvkr.read_json(catalog_path)
+    oversized = []
+    for entry in catalog.get('files', []):
+        spec = entry.get('verified_delta')
+        if entry.get('kind') != 'plugin-records' or not spec:
+            continue
+        payload = vnvkr.contained(data, spec['payload'])
+        if not payload.is_file():
+            raise FileNotFoundError(payload)
+        if payload.stat().st_size <= limit:
+            continue
+        if not entry.get('mappings'):
+            raise ValueError(f"Cannot drop delta without record mappings: {entry['path']}")
+        oversized.append((entry, payload, payload.stat().st_size))
+
+    if not oversized:
+        return []
+
+    removed = []
+    for entry, payload, size in oversized:
+        removed.append({'path': entry['path'], 'payload': entry['verified_delta']['payload'], 'bytes': size})
+        del entry['verified_delta']
+    for payload in {payload for _, payload, _ in oversized}:
+        payload.unlink()
+    vnvkr.write_json(catalog_path, catalog)
+    return removed
+
+
+def prune_koffi_platforms(koffi: Path):
+    """The packaged Node runtimes are Windows x64, so other Koffi binaries are dead weight."""
+    binaries = koffi / 'build' / 'koffi'
+    required = binaries / 'win32_x64' / 'koffi.node'
+    if not required.is_file():
+        raise FileNotFoundError(required)
+    removed = []
+    for child in binaries.iterdir():
+        if child.is_dir() and child.name != 'win32_x64':
+            removed.append(child.name)
+            shutil.rmtree(child)
+    return removed
+
 
 def main():
     p=argparse.ArgumentParser()
@@ -20,6 +67,7 @@ def main():
     for path in (data,backend):
         if path.exists(): shutil.rmtree(path)
     shutil.copytree(a.catalog,data)
+    stripped_deltas = strip_oversized_verified_deltas(data)
     backend.mkdir()
     copies=[
         (root/'.tools/yesman-node-utf8/node.exe',backend/'node.exe'),
@@ -41,6 +89,7 @@ def main():
         if not source.is_dir():
             raise FileNotFoundError(source)
         shutil.copytree(source, backend/'node_modules'/name)
+    removed_koffi_platforms = prune_koffi_platforms(backend/'node_modules'/'koffi')
     readme=a.dist/'README.md'
     readme.write_text(
         '# Viva New Vegas 한국어 패쳐\n\n'
@@ -54,7 +103,9 @@ def main():
     size=sum(p.stat().st_size for p in files)
     print({'files':len(files),'size_mb':round(size/1024/1024,1),
            'translation_data_mb':round(sum(p.stat().st_size for p in data.rglob('*') if p.is_file())/1024/1024,1),
-           'backend_mb':round(sum(p.stat().st_size for p in backend.rglob('*') if p.is_file())/1024/1024,1)})
+           'backend_mb':round(sum(p.stat().st_size for p in backend.rglob('*') if p.is_file())/1024/1024,1),
+           'oversized_deltas_omitted': stripped_deltas,
+           'koffi_platforms_removed': removed_koffi_platforms})
 
 
 if __name__=='__main__':
