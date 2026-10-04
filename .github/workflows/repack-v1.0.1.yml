@@ -21,16 +21,6 @@ jobs:
         shell: pwsh
         run: python -m unittest tests.test_release_packaging -v
 
-      - name: Remove stale v1.0.1 release if present
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh release view v1.0.1 --repo $env:GITHUB_REPOSITORY *> $null
-          if ($LASTEXITCODE -eq 0) {
-            gh release delete v1.0.1 --repo $env:GITHUB_REPOSITORY --cleanup-tag --yes
-          }
-
       - name: Download v1.0.0 package
         shell: pwsh
         run: |
