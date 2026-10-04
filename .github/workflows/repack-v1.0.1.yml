@@ -1,4 +1,4 @@
-name: Analyze v1.0.0 package
+name: Analyze v1.0.0 compressed package
 
 on:
   push:
@@ -9,53 +9,59 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   analyze:
     runs-on: windows-latest
     steps:
-      - name: Remove failed-size v1.0.1 test release
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh release view v1.0.1 --repo $env:GITHUB_REPOSITORY *> $null
-          if ($LASTEXITCODE -eq 0) {
-            gh release delete v1.0.1 --repo $env:GITHUB_REPOSITORY --cleanup-tag --yes
-          }
-
-      - name: Download and inspect v1.0.0
+      - name: Download v1.0.0
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force work, stage | Out-Null
           $url = "https://github.com/" + $env:GITHUB_REPOSITORY + "/releases/download/v1.0.0/VNVKoreanPatcher-v1.0.0.zip"
-          Invoke-WebRequest -Uri $url -OutFile "work/VNVKoreanPatcher-v1.0.0.zip"
-          Expand-Archive "work/VNVKoreanPatcher-v1.0.0.zip" -DestinationPath stage
+          Invoke-WebRequest -Uri $url -OutFile "VNVKoreanPatcher-v1.0.0.zip"
 
-          $packageRoot = Get-ChildItem stage -Directory | Select-Object -First 1
-          "ZIP_BYTES=$((Get-Item 'work/VNVKoreanPatcher-v1.0.0.zip').Length)"
-          "PACKAGE_ROOT=$($packageRoot.FullName)"
+      - name: Inspect compressed contributors
+        shell: python
+        run: |
+          import json, zipfile
+          from pathlib import PurePosixPath
 
-          function SizeOf($path) {
-            if ((Get-Item $path) -is [System.IO.FileInfo]) { return (Get-Item $path).Length }
-            return (Get-ChildItem $path -File -Recurse -Force | Measure-Object Length -Sum).Sum
-          }
+          archive = "VNVKoreanPatcher-v1.0.0.zip"
+          with zipfile.ZipFile(archive) as z:
+              infos = [i for i in z.infolist() if not i.is_dir()]
+              print("ZIP_BYTES", sum(1 for _ in [archive]))
+              print("=== 35 LARGEST BY COMPRESSED SIZE ===")
+              for i in sorted(infos, key=lambda x: x.compress_size, reverse=True)[:35]:
+                  print(i.compress_size, i.file_size, i.filename)
 
-          "=== TOP LEVEL ==="
-          Get-ChildItem $packageRoot.FullName -Force |
-            ForEach-Object { [pscustomobject]@{ Bytes=(SizeOf $_.FullName); Name=$_.Name } } |
-            Sort-Object Bytes -Descending |
-            Format-Table -AutoSize
+              catalog_name = next(i.filename for i in infos if i.filename.endswith("/TranslationData/catalog.json"))
+              catalog = json.loads(z.read(catalog_name).decode("utf-8-sig"))
+              print("=== DELTA 0021 OWNER ===")
+              for entry in catalog.get("files", []):
+                  vd = entry.get("verified_delta") or {}
+                  if str(vd.get("payload", "")).endswith("0021.vcdiff"):
+                      print(json.dumps({
+                          "path": entry.get("path"),
+                          "provider": entry.get("provider"),
+                          "optional": entry.get("optional"),
+                          "mapping_count": len(entry.get("mappings", [])),
+                          "verified_delta": vd,
+                      }, ensure_ascii=False))
 
-          "=== BACKEND ==="
-          Get-ChildItem (Join-Path $packageRoot.FullName "Backend") -Force |
-            ForEach-Object { [pscustomobject]@{ Bytes=(SizeOf $_.FullName); Name=$_.Name } } |
-            Sort-Object Bytes -Descending |
-            Format-Table -AutoSize
+              print("=== VERIFIED DELTAS BY ZIP COMPRESSED SIZE ===")
+              by_name = {i.filename.split("TranslationData/",1)[-1]: i for i in infos if "TranslationData/" in i.filename}
+              rows=[]
+              for entry in catalog.get("files", []):
+                  vd=entry.get("verified_delta") or {}
+                  payload=vd.get("payload")
+                  if payload and payload in by_name:
+                      zi=by_name[payload]
+                      rows.append((zi.compress_size, zi.file_size, entry.get("path"), payload))
+              for row in sorted(rows, reverse=True)[:20]:
+                  print(*row)
 
-          "=== 40 LARGEST FILES ==="
-          Get-ChildItem $packageRoot.FullName -File -Recurse -Force |
-            Sort-Object Length -Descending |
-            Select-Object -First 40 @{N='Bytes';E={$_.Length}}, @{N='Relative';E={$_.FullName.Substring($packageRoot.FullName.Length+1)}} |
-            Format-Table -AutoSize
+              print("=== KOFFI PLATFORM BINARIES ===")
+              for i in sorted((i for i in infos if "/Backend/node_modules/koffi/build/koffi/" in i.filename and i.filename.endswith(".node")),
+                              key=lambda x:x.compress_size, reverse=True):
+                  print(i.compress_size, i.file_size, i.filename)
