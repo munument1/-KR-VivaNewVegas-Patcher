@@ -33,7 +33,14 @@ def main():
         if not source.is_file():
             raise FileNotFoundError(source)
         shutil.copyfile(source,target)
-    shutil.copytree(root/'.tools/YesMan-AI/node_modules',backend/'node_modules')
+    # The runtime adapter only imports xeditlib and koffi.  Copying the whole
+    # YesMan-AI node_modules tree bloats the release with tools the patcher never uses.
+    modules = root/'.tools/YesMan-AI/node_modules'
+    for name in ('xeditlib', 'koffi'):
+        source = modules/name
+        if not source.is_dir():
+            raise FileNotFoundError(source)
+        shutil.copytree(source, backend/'node_modules'/name)
     readme=a.dist/'README.md'
     readme.write_text(
         '# Viva New Vegas 한국어 패쳐\n\n'
