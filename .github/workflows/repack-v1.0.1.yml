@@ -34,8 +34,9 @@ jobs:
       - name: Apply lightweight packaging policy
         shell: python
         run: |
-          import json
+          import json, sys
           from pathlib import Path
+          sys.path.insert(0, str(Path.cwd()))
           from tools.prepare_release_package import prune_koffi_platforms, strip_oversized_verified_deltas
 
           roots = [p for p in Path("stage").iterdir() if p.is_dir()]
@@ -87,7 +88,7 @@ jobs:
       - name: Create compact ZIP
         shell: python
         run: |
-          import hashlib, os, zipfile
+          import hashlib, json, os, zipfile
           from pathlib import Path
 
           root = Path("package-root.txt").read_text(encoding="utf-8").strip()
