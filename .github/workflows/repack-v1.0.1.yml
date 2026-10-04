@@ -1,4 +1,4 @@
-name: Analyze v1.0.0 compressed package
+name: Publish v1.0.1 lightweight
 
 on:
   push:
@@ -9,59 +9,154 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  analyze:
+  release:
     runs-on: windows-latest
     steps:
-      - name: Download v1.0.0
+      - uses: actions/checkout@v4
+
+      - name: Test release-packaging policy
+        shell: pwsh
+        run: python -m unittest tests.test_release_packaging -v
+
+      - name: Remove stale v1.0.1 release if present
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view v1.0.1 --repo $env:GITHUB_REPOSITORY *> $null
+          if ($LASTEXITCODE -eq 0) {
+            gh release delete v1.0.1 --repo $env:GITHUB_REPOSITORY --cleanup-tag --yes
+          }
+
+      - name: Download v1.0.0 package
         shell: pwsh
         run: |
+          New-Item -ItemType Directory -Force work, stage, release | Out-Null
           $url = "https://github.com/" + $env:GITHUB_REPOSITORY + "/releases/download/v1.0.0/VNVKoreanPatcher-v1.0.0.zip"
-          Invoke-WebRequest -Uri $url -OutFile "VNVKoreanPatcher-v1.0.0.zip"
+          Invoke-WebRequest -Uri $url -OutFile "work/VNVKoreanPatcher-v1.0.0.zip"
+          Expand-Archive "work/VNVKoreanPatcher-v1.0.0.zip" -DestinationPath stage
+          $oldSize = (Get-Item "work/VNVKoreanPatcher-v1.0.0.zip").Length
+          "OLD_ZIP_BYTES=$oldSize" | Out-File -FilePath $env:GITHUB_ENV -Append
 
-      - name: Inspect compressed contributors
+      - name: Apply lightweight packaging policy
         shell: python
         run: |
-          import json, zipfile
-          from pathlib import PurePosixPath
+          import json
+          from pathlib import Path
+          from tools.prepare_release_package import prune_koffi_platforms, strip_oversized_verified_deltas
 
-          archive = "VNVKoreanPatcher-v1.0.0.zip"
-          with zipfile.ZipFile(archive) as z:
-              infos = [i for i in z.infolist() if not i.is_dir()]
-              print("ZIP_BYTES", sum(1 for _ in [archive]))
-              print("=== 35 LARGEST BY COMPRESSED SIZE ===")
-              for i in sorted(infos, key=lambda x: x.compress_size, reverse=True)[:35]:
-                  print(i.compress_size, i.file_size, i.filename)
+          roots = [p for p in Path("stage").iterdir() if p.is_dir()]
+          if len(roots) != 1:
+              raise SystemExit(f"Expected one package root, found {roots}")
+          root = roots[0]
 
-              catalog_name = next(i.filename for i in infos if i.filename.endswith("/TranslationData/catalog.json"))
-              catalog = json.loads(z.read(catalog_name).decode("utf-8-sig"))
-              print("=== DELTA 0021 OWNER ===")
-              for entry in catalog.get("files", []):
-                  vd = entry.get("verified_delta") or {}
-                  if str(vd.get("payload", "")).endswith("0021.vcdiff"):
-                      print(json.dumps({
-                          "path": entry.get("path"),
-                          "provider": entry.get("provider"),
-                          "optional": entry.get("optional"),
-                          "mapping_count": len(entry.get("mappings", [])),
-                          "verified_delta": vd,
-                      }, ensure_ascii=False))
+          removed = strip_oversized_verified_deltas(root / "TranslationData")
+          if [row["path"] for row in removed] != ["FalloutNV.esm"]:
+              raise SystemExit(f"Unexpected oversized delta set: {removed}")
 
-              print("=== VERIFIED DELTAS BY ZIP COMPRESSED SIZE ===")
-              by_name = {i.filename.split("TranslationData/",1)[-1]: i for i in infos if "TranslationData/" in i.filename}
-              rows=[]
-              for entry in catalog.get("files", []):
-                  vd=entry.get("verified_delta") or {}
-                  payload=vd.get("payload")
-                  if payload and payload in by_name:
-                      zi=by_name[payload]
-                      rows.append((zi.compress_size, zi.file_size, entry.get("path"), payload))
-              for row in sorted(rows, reverse=True)[:20]:
-                  print(*row)
+          platforms = prune_koffi_platforms(root / "Backend/node_modules/koffi")
+          lock = root / "Backend/node_modules/.package-lock.json"
+          if lock.exists():
+              lock.unlink()
 
-              print("=== KOFFI PLATFORM BINARIES ===")
-              for i in sorted((i for i in infos if "/Backend/node_modules/koffi/build/koffi/" in i.filename and i.filename.endswith(".node")),
-                              key=lambda x:x.compress_size, reverse=True):
-                  print(i.compress_size, i.file_size, i.filename)
+          catalog = json.loads((root / "TranslationData/catalog.json").read_text(encoding="utf-8-sig"))
+          fnv = next(row for row in catalog["files"] if row.get("path") == "FalloutNV.esm" and not row.get("optional"))
+          if fnv.get("verified_delta"):
+              raise SystemExit("FalloutNV.esm still has a packaged verified delta")
+          if len(fnv.get("mappings", [])) < 60000:
+              raise SystemExit("FalloutNV.esm fallback mappings are incomplete")
+          fast = sum(bool(row.get("verified_delta")) for row in catalog["files"] if row.get("kind") == "plugin-records")
+          print(json.dumps({
+              "package_root": str(root.resolve()),
+              "omitted": removed,
+              "koffi_platforms_removed": platforms,
+              "remaining_verified_deltas": fast,
+              "falloutnv_mappings": len(fnv["mappings"]),
+          }, ensure_ascii=False, indent=2))
+
+          with open("package-root.txt", "w", encoding="utf-8") as f:
+              f.write(str(root.resolve()))
+
+      - name: Verify both compatibility runtimes
+        shell: pwsh
+        run: |
+          $root = Get-Content "package-root.txt"
+          $backend = Join-Path $root "Backend"
+          $env:VNVKR_NODE_MODULES = Join-Path $backend "node_modules"
+          $probe = "require(process.env.VNVKR_NODE_MODULES + '/xeditlib'); require(process.env.VNVKR_NODE_MODULES + '/koffi'); console.log(process.arch + ':' + process.platform + ':backend-ok')"
+
+          & (Join-Path $backend "node.exe") -e $probe
+          if ($LASTEXITCODE -ne 0) { throw "UTF-8 Node backend load failed" }
+
+          & (Join-Path $backend "node-1252.exe") -e $probe
+          if ($LASTEXITCODE -ne 0) { throw "CP1252 Node backend load failed" }
+
+      - name: Create compact ZIP
+        shell: python
+        run: |
+          import hashlib, os, zipfile
+          from pathlib import Path
+
+          root = Path("package-root.txt").read_text(encoding="utf-8").strip()
+          root = Path(root)
+          stage = root.parent
+          out = Path("release/VNVKoreanPatcher-v1.0.1.zip")
+          with zipfile.ZipFile(out, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as z:
+              for path in sorted(root.rglob("*")):
+                  if path.is_file():
+                      z.write(path, path.relative_to(stage).as_posix())
+
+          size = out.stat().st_size
+          old = int(os.environ["OLD_ZIP_BYTES"])
+          saved = old - size
+          pct = round(saved / old * 100, 1)
+          if size >= 130_000_000:
+              raise SystemExit(f"Lightweight package unexpectedly large: {size} bytes")
+
+          digest = hashlib.sha256(out.read_bytes()).hexdigest()
+          Path("release/VNVKoreanPatcher-v1.0.1.sha256.txt").write_text(
+              f"{digest}  {out.name}\n", encoding="ascii")
+          Path("release/size.json").write_text(json.dumps({
+              "old": old, "new": size, "saved": saved, "percent": pct
+          }), encoding="utf-8")
+        env:
+          OLD_ZIP_BYTES: ${{ env.OLD_ZIP_BYTES }}
+
+      - name: Write release notes
+        shell: pwsh
+        run: |
+          $size = Get-Content "release/size.json" | ConvertFrom-Json
+          @"
+          # Viva New Vegas 한국어 패쳐 v1.0.1
+
+          패키지 용량을 줄인 릴리즈입니다. 번역 범위와 업데이트 플러그인 대응 기능은 유지합니다.
+
+          - 기존 ZIP: $($size.old) bytes
+          - 새 ZIP: $($size.new) bytes
+          - 감소: $($size.saved) bytes ($($size.percent)%)
+          - FalloutNV.esm의 130MB급 xdelta는 패키지에서 제외
+          - FalloutNV.esm은 기존 YesMan-AI/xEditLib 레코드 병합 경로로 번역
+          - 따라서 동일 버전뿐 아니라 FalloutNV.esm/기타 플러그인이 업데이트되어 해시가 달라져도 기존 매핑 기반 번역 적용 가능
+          - 나머지 검증된 플러그인은 기존 xdelta3 빠른 경로 유지
+          - Koffi는 패쳐가 실제 사용하는 Windows x64 바이너리만 포함
+          - UTF-8 / CP1252 Node 런타임은 둘 다 유지하고 실제 모듈 로드 검증 완료
+          - tNVSE/UI/라디오/폰트/Translations 구성은 변경 없음
+
+          참고: FalloutNV.esm은 이제 xdelta 대신 레코드 검증/병합을 거치므로 Output 생성 시간이 이전보다 길어질 수 있습니다.
+          "@ | Set-Content -Encoding utf8 "release/release-notes.md"
+
+      - name: Publish v1.0.1
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create v1.0.1 `
+            "release/VNVKoreanPatcher-v1.0.1.zip" `
+            "release/VNVKoreanPatcher-v1.0.1.sha256.txt" `
+            --repo $env:GITHUB_REPOSITORY `
+            --target $env:GITHUB_SHA `
+            --title "Viva New Vegas 한국어 패쳐 v1.0.1" `
+            --notes-file "release/release-notes.md"
