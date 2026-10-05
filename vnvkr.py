@@ -17,7 +17,7 @@ import tempfile
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 
-VERSION = "1.0.0"
+VERSION = "1.0.2"
 ROOT = Path(__file__).resolve().parent
 RESERVED = {"meta.ini", ".vnv-kr-report.json"}
 HASH = re.compile(r"[0-9a-f]{64}\Z")
@@ -240,7 +240,17 @@ def delta(executable: Path, mode: str, source: Path, input_file: Path, output: P
     env = os.environ.copy()
     env.pop("XDELTA", None)
     # Process exact bytes, suppress source-name headers; never force an overwrite.
-    options = ["-e", "-A", "-D"] if mode == "encode" else ["-d", "-D", "-R"]
+    # xdelta3's default 64 MiB source window is disastrous for large Bethesda
+    # masters after xEdit reorders records: moved records outside that window
+    # become literal payload. Let the encoder see the complete source (up to
+    # 512 MiB) so exact record bytes can still be referenced after reordering.
+    if mode == "encode":
+        source_size = source.stat().st_size
+        window = 1 << max(26, (source_size - 1).bit_length())
+        window = min(window, 512 * 1024 * 1024)
+        options = ["-e", "-9", "-A", "-D", "-B", str(window)]
+    else:
+        options = ["-d", "-D", "-R"]
     result = subprocess.run([str(executable), *options, "-s", str(source), str(input_file), str(output)],
                             capture_output=True, env=env, timeout=600)
     if result.returncode:

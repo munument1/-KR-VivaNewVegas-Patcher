@@ -40,19 +40,65 @@ def runtime(codepage=65001):
     return node, adapter, modules
 
 
+def _xedit_isolation_args(request, job):
+    """Keep xEdit's profile, INI, plugin-list, cache and temp I/O inside the job."""
+    root = job / 'XEditIsolation'
+    paths = {name: root / name for name in ('Saves', 'Backups', 'Cache', 'Temp', 'Scripts')}
+    for directory in (root, *paths.values()):
+        directory.mkdir(parents=True, exist_ok=True)
+    plugins_file = root / 'plugins.txt'
+    plugins_file.write_text('\n'.join(request.get('plugins', ())) + '\n', encoding='cp1252')
+    game = Path(request['game'])
+    return [
+        f'-D:{game / "Data"}',
+        f'-M:{root}{os.sep}',
+        f'-I:{root / "Fallout.ini"}',
+        f'-CustomIni:{root / "FalloutCustom.ini"}',
+        f'-G:{paths["Saves"]}{os.sep}',
+        f'-P:{plugins_file}',
+        f'-B:{paths["Backups"]}{os.sep}',
+        f'-C:{paths["Cache"]}{os.sep}',
+        f'-T:{paths["Temp"]}{os.sep}',
+        f'-S:{paths["Scripts"]}{os.sep}',
+        f'-R:{root / "xelib.log"}',
+    ]
+
+
 def run_adapter(request, job, phase):
     node, adapter, modules = runtime(request.get('readCodepage', 65001))
     path = job / f'{phase}.request.json'
     vnvkr.write_json(path, request)
     env = os.environ.copy()
     env['VNVKR_NODE_MODULES'] = str(modules)
-    result = subprocess.run([str(node), str(adapter), str(path)], capture_output=True,
+    command = [str(node), str(adapter), str(path), *_xedit_isolation_args(request, job)]
+    result = subprocess.run(command, capture_output=True,
                             env=env, timeout=1800, creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
     (job / f'{phase}.log').write_bytes(result.stdout + result.stderr)
     if result.returncode:
         message = result.stderr.decode('utf-8', errors='replace').replace('\x00', '')[-3000:]
         raise ValueError(f'New Vegas record {phase} failed: {message}')
     return vnvkr.read_json(Path(request['output']))
+
+
+def _session_plugins(installation, entries, source_overrides):
+    """Use only the load-order prefix that can contain masters of active targets.
+
+    A valid Bethesda load order places every master before its dependent plugin.
+    Keeping the prefix therefore preserves dependency safety while avoiding the
+    cost of loading unrelated later plugins on every verification pass.
+    Optional inactive variants retain the conservative full-active fallback.
+    """
+    active = list(installation.active)
+    if source_overrides:
+        plugins = active[:]
+        present = {name.casefold() for name in plugins}
+        plugins.extend(name for name in source_overrides if name.casefold() not in present)
+        return plugins
+    targets = {entry['path'].casefold() for entry in entries}
+    positions = [index for index, name in enumerate(active) if name.casefold() in targets]
+    if len(positions) != len(targets):
+        return active
+    return active[:max(positions) + 1] if positions else active
 
 
 def merge_plugins(installation, entries, catalog, job, source_overrides=None):
@@ -68,8 +114,7 @@ def merge_plugins(installation, entries, catalog, job, source_overrides=None):
     data.mkdir(parents=True)
     source_overrides = source_overrides or {}
     overrides = {name.casefold(): source for name, source in source_overrides.items()}
-    plugins = list(installation.active)
-    plugins.extend(name for name in source_overrides if name.casefold() not in {p.casefold() for p in plugins})
+    plugins = _session_plugins(installation, entries, source_overrides)
     original_hashes = {}
     for plugin in plugins:
         source = overrides.get(plugin.casefold()) or installation.source(plugin)
@@ -83,11 +128,18 @@ def merge_plugins(installation, entries, catalog, job, source_overrides=None):
     translated = job / 'Translated'
     request = {'game': str(game), 'plugins': plugins, 'targets': list(maps),
                'fields': catalog['plugin_fields'], 'mappings': maps, 'mode': 'apply',
-               'outDir': str(translated), 'output': str(job / 'apply.json')}
+               'includeRows': False, 'outDir': str(translated),
+               'output': str(job / 'apply.json')}
     # Independent CP1252 snapshot checks the original legacy strings as well as
     # structures. UTF-8 alone collapses malformed/legacy bytes to U+FFFD.
     snapshot_request = {k: request[k] for k in ('game', 'plugins', 'targets', 'fields')}
-    snapshot_request.update(mode='snapshot', readCodepage=1252, output=str(job / 'legacy-before.json'))
+    legacy_record_keys = {
+        plugin: sorted({'|'.join((row['owner'], row['id'], row['signature'])) for row in rows})
+        for plugin, rows in maps.items()
+    }
+    snapshot_request.update(mode='snapshot', readCodepage=1252,
+                            legacyRecordKeys=legacy_record_keys,
+                            output=str(job / 'legacy-before.json'))
     legacy = run_adapter(snapshot_request, job, 'legacy-before')
     legacy_sources = {file['plugin']: file['rows'] for file in legacy['files']}
     request['legacySources'] = legacy_sources

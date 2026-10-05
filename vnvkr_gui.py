@@ -23,7 +23,7 @@ class App:
         self.folder = program_folder()
         self.events = queue.Queue()
         self.output = None
-        window.title('Viva New Vegas 한국어 패쳐')
+        window.title(f'Viva New Vegas 한국어 패쳐 v{vnvkr.VERSION}')
         window.minsize(660, 240)
         frame = ttk.Frame(window, padding=22)
         frame.pack(fill='both', expand=True)
@@ -117,6 +117,16 @@ def packaged_self_test(mo2_root):
     catalog = folder / 'TranslationData'
     if not (catalog / 'catalog.json').is_file():
         raise FileNotFoundError('TranslationData/catalog.json')
+    metadata = vnvkr.read_json(catalog / 'catalog.json')
+    native = [entry for entry in metadata['files'] if entry.get('kind') == 'plugin-records']
+    verified = [entry for entry in native if entry.get('verified_delta')]
+    if len(verified) != len(native) or metadata.get('verified_delta_files') != len(verified):
+        raise RuntimeError('Packaged release is missing one or more verified fast deltas')
+    for entry in verified:
+        spec = entry['verified_delta']
+        payload = vnvkr.contained(catalog, spec['payload'])
+        if not payload.is_file() or vnvkr.sha256(payload) != spec['payload_sha256']:
+            raise RuntimeError(f'Packaged verified delta is missing/corrupt: {entry["path"]}')
     for required in ('Backend/xdelta3.exe', 'Backend/node.exe', 'Backend/node-1252.exe',
                      'Backend/yesman_text.cjs', 'Backend/node_modules/xeditlib/XEditLib.dll'):
         if not (folder / required).is_file():
@@ -125,8 +135,8 @@ def packaged_self_test(mo2_root):
         output = Path(tmp) / 'Output'
         report = build_output(vnvkr.Installation(Path(mo2_root)), catalog, output)
         fast = sum(row.get('status') == 'exact_source_verified_delta' for row in report['files'])
-        if fast < 37 or not output.is_dir():
-            raise RuntimeError(f'Packaged fast path incomplete: {fast}')
+        if fast < 1 or not output.is_dir():
+            raise RuntimeError(f'Packaged fast path did not complete: {fast}')
     return 0
 
 

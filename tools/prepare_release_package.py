@@ -63,6 +63,20 @@ def main():
     root=Path(__file__).resolve().parents[1]
     if not (a.dist/'VNVKoreanPatcher.exe').is_file():
         raise FileNotFoundError(a.dist/'VNVKoreanPatcher.exe')
+    catalog = vnvkr.read_json(a.catalog / 'catalog.json')
+    native = [entry for entry in catalog['files'] if entry.get('kind') == 'plugin-records']
+    verified = [entry for entry in native if entry.get('verified_delta')]
+    if len(verified) != len(native):
+        missing = [entry['path'] for entry in native if not entry.get('verified_delta')]
+        raise ValueError(f'Release catalog is missing verified fast deltas: {missing}')
+    if catalog.get('verified_delta_files') != len(verified):
+        raise ValueError('verified_delta_files metadata does not match the release catalog')
+    for entry in verified:
+        spec = entry['verified_delta']
+        payload = vnvkr.contained(a.catalog, spec['payload'])
+        if not payload.is_file() or vnvkr.sha256(payload) != spec['payload_sha256']:
+            raise ValueError(f'Verified delta payload is missing/corrupt: {entry["path"]}')
+
     data=a.dist/'TranslationData'; backend=a.dist/'Backend'
     for path in (data,backend):
         if path.exists(): shutil.rmtree(path)

@@ -160,6 +160,7 @@ async function main() {
     const verified=new Set();
     const mappings=request.mappings && request.mappings[plugin] || [];
     const legacyRows=new Map((request.legacySources?.[plugin] || []).map(r=>[key(r)+'|'+r.path,r]));
+    const legacyRecordKeys=new Set(request.legacyRecordKeys?.[plugin] || []);
     const byRecord=new Map();
     for(const mapping of mappings) {
       if(typeof mapping.dest!=='string' || mapping.dest.includes('\uFFFD')) throw new Error('Invalid translation text');
@@ -177,10 +178,15 @@ async function main() {
       const records=(all || x.getRecords(file,signature,true)).sort((a,b)=>b-a);
       for (const record of records) {
         const signature=x.signature(record), fields=request.fields[signature] || [];
-        let edid=''; if(x.hasElement(record,'EDID')) edid=x.getValue(record,'EDID');
         if(signature!=='TES4') {
-          const ident=identity(file,record);
-          const items=(signature!=='GMST' || edid.startsWith('s')) && fields.length ? textFields(record,new Set(fields)) : [];
+          const ident=identity(file,record), recordKey=key(ident);
+          const wantsRows=request.includeRows!==false &&
+            (!request.legacyRecordKeys || legacyRecordKeys.has(recordKey));
+          const needsItems=request.structures || wantsRows || request.mode==='apply';
+          let edid='';
+          if(needsItems && x.hasElement(record,'EDID')) edid=x.getValue(record,'EDID');
+          const items=needsItems && (signature!=='GMST' || edid.startsWith('s')) && fields.length ?
+            textFields(record,new Set(fields)) : [];
           if(request.structures && items.length) structures.push({...ident,json:recordJson(record)});
           let originalDigest;
           if(['apply','snapshot'].includes(request.mode)) originalDigest=digest(record);
@@ -192,7 +198,7 @@ async function main() {
               const legacy=legacyRows.get(key(row)+'|'+row.path);
               if(legacy && !legacy.source.includes('\uFFFD'))row.source=legacy.source;
             }
-            if(request.includeRows!==false)rows.push(row);
+            if(wantsRows) rows.push(row);
             if(request.mode==='apply') {
               const possible=destinations(row,byRecord.get(key(row)) || []);
               if(possible.size!==1) {missing.push({...row,reason:possible.size ? 'ambiguous' : 'unmatched'});continue;}

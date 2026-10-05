@@ -1,6 +1,6 @@
 param(
     [string]$Python = ".venv\Scripts\python.exe",
-    [string]$Catalog = "bundles\records-release-20261004"
+    [string]$Catalog = "bundles\records-release-20261005"
 )
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot

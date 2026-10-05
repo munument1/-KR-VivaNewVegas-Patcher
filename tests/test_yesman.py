@@ -26,6 +26,43 @@ class PluginFormatTests(unittest.TestCase):
                 backend.validate_mapping(self.row(source, dest))
 
 
+class PipelinePlanningTests(unittest.TestCase):
+    def test_active_targets_use_only_required_load_order_prefix(self):
+        installation = SimpleNamespace(active=[
+            'FalloutNV.esm', 'DeadMoney.esm', 'YUP.esm', 'Late Patch.esp'])
+        self.assertEqual(
+            backend._session_plugins(installation, [{'path': 'FalloutNV.esm'}], {}),
+            ['FalloutNV.esm'])
+        self.assertEqual(
+            backend._session_plugins(installation, [{'path': 'YUP.esm'}], {}),
+            ['FalloutNV.esm', 'DeadMoney.esm', 'YUP.esm'])
+        self.assertEqual(
+            backend._session_plugins(installation, [{'path': 'Missing.esp'}], {}),
+            installation.active)
+
+    def test_optional_override_keeps_conservative_full_active_set(self):
+        installation = SimpleNamespace(active=['FalloutNV.esm', 'YUP.esm'])
+        plugins = backend._session_plugins(
+            installation, [{'path': 'Optional.esp'}], {'Optional.esp': Path('optional')})
+        self.assertEqual(plugins, ['FalloutNV.esm', 'YUP.esm', 'Optional.esp'])
+
+    def test_xedit_paths_are_isolated_inside_job(self):
+        with tempfile.TemporaryDirectory(prefix='VNV xEdit isolation ') as temp:
+            job = Path(temp)
+            game = job / 'Game'
+            request = {'game': str(game), 'plugins': ['FalloutNV.esm', 'YUP.esm']}
+            args = backend._xedit_isolation_args(request, job)
+            isolation = job / 'XEditIsolation'
+            self.assertEqual(
+                (isolation / 'plugins.txt').read_text(encoding='cp1252'),
+                'FalloutNV.esm\nYUP.esm\n')
+            self.assertIn(f'-D:{game / "Data"}', args)
+            self.assertIn(f'-M:{isolation}{__import__("os").sep}', args)
+            self.assertIn(f'-P:{isolation / "plugins.txt"}', args)
+            self.assertTrue((isolation / 'Temp').is_dir())
+            self.assertTrue((isolation / 'Cache').is_dir())
+
+
 class NativeUpdateTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
