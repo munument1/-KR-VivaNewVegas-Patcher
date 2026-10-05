@@ -272,6 +272,29 @@ class OutputTests(unittest.TestCase):
         self.assertEqual(report['files'][0]['status'], 'exact_source_verified_delta')
         self.assertEqual(report['files'][0]['translated'], 7)
 
+    def test_already_patched_verified_plugin_skips_delta_and_native_backend(self):
+        current = b'already Korean plugin'
+        (self.mod / 'Mod.esp').write_bytes(current)
+        patch_file = self.catalog / 'already.vcdiff'
+        patch_file.write_bytes(b'fixture delta not needed for already-patched source')
+        plugin = {'path': 'Mod.esp', 'kind': 'plugin-records',
+                  'baseline_sha256': '1' * 64, 'mappings': [],
+                  'verified_delta': {'source_sha256': '2' * 64,
+                      'target_sha256': __import__('hashlib').sha256(current).hexdigest(),
+                      'target_size': len(current), 'payload': 'already.vcdiff',
+                      'payload_sha256': vnvkr.sha256(patch_file), 'translated': 5,
+                      'unmatched': 0, 'records_verified': 9, 'verification': 'fixture'}}
+        vnvkr.write_json(self.catalog / 'catalog.json', {'schema_version': 1, 'files': [plugin]})
+        with mock.patch.object(output.vnvkr, 'delta', side_effect=AssertionError('delta should not run')), \
+             mock.patch.object(output.vnvkr_yesman, 'merge_plugins',
+                               side_effect=AssertionError('native backend should not run')):
+            report = self.build()
+        result = report['files'][0]
+        self.assertEqual(result['status'], 'already_patched_verified')
+        self.assertEqual((self.out / 'mods/Renamed Mod/Mod.esp').read_bytes(), current)
+        outcome = next(row for row in report['plugin_outcomes'] if row['path'] == 'Mod.esp')
+        self.assertEqual(outcome['category'], 'already_patched')
+
     def test_texture_follows_renamed_provider_and_keeps_original(self):
         asset = self.mod / 'Textures/terminals/english/vitomatic_page_0.dds'
         asset.parent.mkdir(parents=True)
