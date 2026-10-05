@@ -97,7 +97,9 @@ def plugin_outcomes(report):
     for row in report.get('files', []):
         if Path(row.get('path', '')).suffix.casefold() not in PLUGIN_SUFFIXES:
             continue
-        if row.get('discovered_plugin'):
+        if row.get('status') == 'already_patched_verified':
+            category = 'already_patched'
+        elif row.get('discovered_plugin'):
             category = 'new_inherited'
         elif row.get('source_updated'):
             if row.get('translated', 0) == 0:
@@ -137,6 +139,7 @@ def plugin_outcomes(report):
 def format_plugin_report(report):
     labels = [
         ('patched', '정상 패치'),
+        ('already_patched', '이미 한글 적용됨 - 검증된 결과 재사용'),
         ('updated_patched', '업데이트 감지 - 번역 전체 적용'),
         ('updated_partial', '업데이트 감지 - 일부 문구 미적용'),
         ('updated_untranslated', '업데이트 감지 - 한글 적용 없음'),
@@ -409,12 +412,15 @@ def verified_delta(entry, catalog_dir, source):
             raise ValueError(f'Invalid verified delta metadata: {entry["path"]}')
     if type(spec.get('target_size')) is not int or spec['target_size'] < 0:
         raise ValueError(f'Invalid verified delta size: {entry["path"]}')
-    if vnvkr.sha256(source) != spec['source_sha256']:
+    current_hash = vnvkr.sha256(source)
+    if current_hash == spec['target_sha256'] and source.stat().st_size == spec['target_size']:
+        return {'mode': 'already_patched', 'spec': spec}
+    if current_hash != spec['source_sha256']:
         return None
     patch = vnvkr.contained(catalog_dir, spec['payload'])
     if vnvkr.sha256(patch) != spec['payload_sha256']:
         raise ValueError(f'Verified delta integrity mismatch: {entry["path"]}')
-    return patch, spec
+    return {'mode': 'delta', 'patch': patch, 'spec': spec}
 
 
 def build_output(installation, catalog_dir, output):
@@ -514,18 +520,24 @@ def build_output(installation, catalog_dir, output):
                 fast = (verified_delta(entry, catalog_dir, source) if entry.get('optional')
                         else fast_native.get(key))
                 if fast:
-                    patch, spec = fast
+                    spec = fast['spec']
                     target.parent.mkdir(parents=True, exist_ok=True)
-                    if delta_engine is None:
-                        delta_engine = vnvkr.engine(None)
-                    vnvkr.delta(delta_engine, 'decode', source, patch, target)
-                    if target.stat().st_size != spec['target_size'] or vnvkr.sha256(target) != spec['target_sha256']:
-                        raise ValueError(f'Verified delta output mismatch: {entry["path"]}')
+                    if fast['mode'] == 'already_patched':
+                        shutil.copyfile(source, target)
+                        status = 'already_patched_verified'
+                    else:
+                        patch = fast['patch']
+                        if delta_engine is None:
+                            delta_engine = vnvkr.engine(None)
+                        vnvkr.delta(delta_engine, 'decode', source, patch, target)
+                        if target.stat().st_size != spec['target_size'] or vnvkr.sha256(target) != spec['target_sha256']:
+                            raise ValueError(f'Verified delta output mismatch: {entry["path"]}')
+                        status = 'exact_source_verified_delta'
                     statistics = {'translated': spec.get('translated', len(entry['mappings'])),
                                   'unmatched': spec.get('unmatched', 0),
                                   'records_verified': spec.get('records_verified', 0),
                                   'verification': spec.get('verification', 'verified_delta_roundtrip')}
-                    result.update(statistics, status='exact_source_verified_delta')
+                    result.update(statistics, status=status)
                 else:
                     if entry.get('optional'):
                         # A same-name inactive variant gets its own copied session.
