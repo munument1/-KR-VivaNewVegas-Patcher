@@ -72,6 +72,20 @@ class OutputTests(unittest.TestCase):
             self.build()
         self.assertFalse(self.out.exists())
 
+    def test_removed_catalog_plugin_is_skipped_before_native_backend(self):
+        (self.mod / 'Mod.esp').unlink()
+        plugin = {'path': 'Mod.esp', 'kind': 'plugin-records',
+                  'baseline_sha256': '0' * 64, 'mappings': []}
+        vnvkr.write_json(self.catalog / 'catalog.json',
+                         {'schema_version': 1, 'files': [self.mapping, plugin], 'plugin_fields': {}})
+        with mock.patch.object(output.vnvkr_yesman, 'merge_plugins',
+                               side_effect=AssertionError('missing plugin reached native backend')):
+            report = self.build()
+        skipped = next(row for row in report['skipped'] if row['path'] == 'Mod.esp')
+        self.assertEqual(skipped['reason'], 'not_installed')
+        self.assertFalse((self.out / 'mods/Renamed Mod/Mod.esp').exists())
+
+
     def test_json_binding_survives_moved_option_new_fields_remain(self):
         before = {'modName': 'Test', 'options': {'1': {'title': 'Speed', 'vars': [{'configINI': 'Move:speed', 'default': 1}]}}}
         current = {'modName': 'Test', 'options': {
