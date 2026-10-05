@@ -86,6 +86,89 @@ class OutputTests(unittest.TestCase):
         self.assertFalse((self.out / 'mods/Renamed Mod/Mod.esp').exists())
 
 
+    def test_fixed_esm_memory_uses_only_official_master_entries(self):
+        base = {'owner': 'falloutnv.esm', 'id': '123456', 'signature': 'MESG',
+                'field': 'DESC', 'path': 'DESC', 'source': 'Vanilla text', 'dest': '기본 번역'}
+        patch = {**base, 'dest': '패치 전용 번역'}
+        catalog = {'files': [
+            {'path': 'FalloutNV.esm', 'kind': 'plugin-records', 'mappings': [base]},
+            {'path': 'Some Patch.esp', 'kind': 'plugin-records', 'mappings': [patch]},
+        ]}
+        memory = output.base_translation_memory(catalog)
+        self.assertEqual(len(memory), 1)
+        self.assertEqual(memory[0]['dest'], '기본 번역')
+
+    def test_new_plugin_is_auto_inherited_and_reported(self):
+        fixed = self.mod / 'FalloutNV.esm'
+        fixed.write_bytes(b'fixed master current')
+        new_plugin = self.mod / 'New VNV Patch.esp'
+        new_plugin.write_bytes(b'new plugin current')
+        profile = self.mo2 / 'profiles/Extended'
+        (profile / 'plugins.txt').write_text(
+            'FalloutNV.esm\nMod.esp\nNew VNV Patch.esp\n', encoding='cp1252')
+        (profile / 'loadorder.txt').write_text(
+            'FalloutNV.esm\nMod.esp\nNew VNV Patch.esp\n', encoding='utf-8')
+        self.plugin['baseline_sha256'] = vnvkr.sha256(self.mod / 'Mod.esp')
+        base_mapping = {'owner': 'falloutnv.esm', 'id': '123456', 'signature': 'MESG',
+                        'field': 'DESC', 'path': 'DESC', 'source': 'Vanilla text', 'dest': '기본 번역'}
+        base_entry = {'path': 'FalloutNV.esm', 'kind': 'plugin-records',
+                      'baseline_sha256': vnvkr.sha256(fixed), 'mappings': [base_mapping]}
+        vnvkr.write_json(self.catalog / 'catalog.json',
+                         {'schema_version': 1, 'files': [self.mapping, self.plugin, base_entry],
+                          'plugin_fields': {'MESG': ['DESC']}})
+
+        def fake_merge(installation, entries, catalog, job, source_overrides=None,
+                       fallback_mappings=None, inherit_targets=None):
+            self.assertEqual(inherit_targets, {'New VNV Patch.esp'})
+            self.assertEqual(fallback_mappings, [base_mapping])
+            translated = job / 'Translated'
+            translated.mkdir(parents=True)
+            stats = {}
+            for entry in entries:
+                if entry['path'] == 'FalloutNV.esm':
+                    (translated / entry['path']).write_bytes(b'fixed master Korean')
+                    stats[entry['path']] = {'translated': 1, 'inherited_translated': 0,
+                                            'catalog_translated': 1, 'unmatched': 0,
+                                            'unmatched_entries': [], 'records_verified': 1}
+                elif entry['path'] == 'New VNV Patch.esp':
+                    (translated / entry['path']).write_bytes(b'new plugin inherited Korean')
+                    stats[entry['path']] = {'translated': 1, 'inherited_translated': 1,
+                                            'catalog_translated': 0, 'unmatched': 0,
+                                            'unmatched_entries': [], 'records_verified': 1}
+                else:
+                    self.fail(f'unexpected native entry: {entry["path"]}')
+            return translated, stats
+
+        with mock.patch.object(output.vnvkr_yesman, 'merge_plugins', side_effect=fake_merge):
+            report = self.build()
+        self.assertEqual((self.out / 'mods/Renamed Mod/New VNV Patch.esp').read_bytes(),
+                         b'new plugin inherited Korean')
+        inherited = next(row for row in report['plugin_outcomes']
+                         if row['path'] == 'New VNV Patch.esp')
+        self.assertEqual(inherited['category'], 'new_inherited')
+        self.assertEqual(inherited['translated'], 1)
+        text_report = Path(report['report_text'])
+        self.assertTrue(text_report.is_file())
+        self.assertIn('신규 플러그인 - Fixed ESM 동일 레코드 번역 상속',
+                      text_report.read_text(encoding='utf-8-sig'))
+
+    def test_plugin_outcomes_distinguish_updates_removals_and_no_match(self):
+        report = {'files': [
+            {'path': 'UpdatedGood.esp', 'source_updated': True, 'translated': 4, 'unmatched': 0},
+            {'path': 'UpdatedPartial.esp', 'source_updated': True, 'translated': 3, 'unmatched': 2},
+            {'path': 'UpdatedNone.esp', 'source_updated': True, 'translated': 0, 'unmatched': 5},
+        ], 'skipped': [
+            {'path': 'Removed.esp', 'reason': 'not_installed'},
+            {'path': 'NewNoMatch.esp', 'reason': 'new_plugin_no_base_translation_match',
+             'base_record_mismatches': 2},
+        ]}
+        categories = {row['path']: row['category'] for row in output.plugin_outcomes(report)}
+        self.assertEqual(categories['UpdatedGood.esp'], 'updated_patched')
+        self.assertEqual(categories['UpdatedPartial.esp'], 'updated_partial')
+        self.assertEqual(categories['UpdatedNone.esp'], 'updated_untranslated')
+        self.assertEqual(categories['Removed.esp'], 'removed')
+        self.assertEqual(categories['NewNoMatch.esp'], 'new_no_match')
+
     def test_json_binding_survives_moved_option_new_fields_remain(self):
         before = {'modName': 'Test', 'options': {'1': {'title': 'Speed', 'vars': [{'configINI': 'Move:speed', 'default': 1}]}}}
         current = {'modName': 'Test', 'options': {
