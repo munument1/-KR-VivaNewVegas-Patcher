@@ -23,12 +23,13 @@ class App:
         self.folder = program_folder()
         self.events = queue.Queue()
         self.output = None
+        self.report_file = None
         window.title(f'Viva New Vegas 한국어 패쳐 v{vnvkr.VERSION}')
-        window.minsize(660, 240)
+        window.minsize(780, 270)
         frame = ttk.Frame(window, padding=22)
         frame.pack(fill='both', expand=True)
         frame.columnconfigure(0, weight=1)
-        ttk.Label(frame, text='비바 뉴 베가스 MO2 폴더').grid(row=0, column=0, columnspan=2, sticky='w')
+        ttk.Label(frame, text='비바 뉴 베가스 MO2 폴더').grid(row=0, column=0, columnspan=3, sticky='w')
         default = 'C:/Modlists/VNV' if Path('C:/Modlists/VNV/ModOrganizer.ini').is_file() else ''
         self.mo2 = tk.StringVar(value=default)
         ttk.Entry(frame, textvariable=self.mo2).grid(row=1, column=0, sticky='ew', pady=(6, 16))
@@ -38,9 +39,11 @@ class App:
         self.generate.grid(row=2, column=0, sticky='w')
         self.open_button = ttk.Button(frame, text='Output 폴더 열기', command=self.open_output, state='disabled')
         self.open_button.grid(row=2, column=1)
+        self.report_button = ttk.Button(frame, text='패치 결과 보기', command=self.open_report, state='disabled')
+        self.report_button.grid(row=2, column=2, padx=(8, 0))
         self.status = tk.StringVar(value='Output 안의 mods 폴더를 선택한 MO2 폴더로 복사하면 됩니다.')
-        ttk.Label(frame, textvariable=self.status, wraplength=600, justify='left').grid(
-            row=3, column=0, columnspan=2, sticky='w', pady=(18, 0))
+        ttk.Label(frame, textvariable=self.status, wraplength=740, justify='left').grid(
+            row=3, column=0, columnspan=3, sticky='w', pady=(18, 0))
         window.after(150, self.poll)
 
     def choose(self):
@@ -65,6 +68,8 @@ class App:
         self.generate.configure(state='disabled')
         self.browse.configure(state='disabled')
         self.open_button.configure(state='disabled')
+        self.report_button.configure(state='disabled')
+        self.report_file = None
         self.status.set('선택한 프로필의 원본을 읽고 Output을 생성하고 있습니다.')
 
         def run():
@@ -89,6 +94,8 @@ class App:
             else:
                 _, self.output, report = event
                 unmatched = sum(row.get('unmatched', 0) for row in report['files'])
+                outcomes = report.get('plugin_outcomes', [])
+                count = lambda category: sum(row.get('category') == category for row in outcomes)
                 fonts = report.get('fonts', {})
                 activation = (f'\nMO2에서 "{fonts["mod"]}" 모드를 체크하고 tNVSE보다 아래에 배치해주세요.'
                               if fonts.get('requires_activation') else '')
@@ -102,14 +109,28 @@ class App:
                 plugins = runtime.get('plugins_requiring_activation', [])
                 if plugins:
                     activation += '\nMO2 플러그인 목록에서 다음 ESP도 체크해주세요: ' + ', '.join(plugins)
+                plugin_summary = (
+                    f"플러그인: 정상 {count('patched')} · 업데이트 전체적용 {count('updated_patched')} · "
+                    f"업데이트 일부미적용 {count('updated_partial')} · 업데이트 미적용 {count('updated_untranslated')} · "
+                    f"제거 {count('removed')} · 신규상속 {count('new_inherited')} · 신규미대응 {count('new_no_match')}"
+                )
                 self.status.set(f"{len(report['files'])}개 파일 생성 완료 · 미대응 항목 {unmatched}개 · 제외 파일 {len(report['skipped'])}개\n"
-                                f"{self.output}\nOutput 안의 mods 폴더를 선택한 MO2 폴더로 복사해주세요.{activation}")
+                                f"{plugin_summary}\n{self.output}\n"
+                                f"Output 안의 mods 폴더를 선택한 MO2 폴더로 복사해주세요.{activation}")
                 self.open_button.configure(state='normal')
+                report_file = report.get('report_text')
+                if report_file and Path(report_file).is_file():
+                    self.report_file = Path(report_file)
+                    self.report_button.configure(state='normal')
         self.window.after(150, self.poll)
 
     def open_output(self):
         if self.output:
             os.startfile(self.output)
+
+    def open_report(self):
+        if self.report_file and self.report_file.is_file():
+            os.startfile(self.report_file)
 
 
 def packaged_self_test(mo2_root):
