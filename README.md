@@ -4,9 +4,9 @@ Viva New Vegas(VNV)용 한국어 Output 생성기입니다. 사용자가 VNV MO2
 
 ## 현재 상태
 
-2026-10-04 기준 릴리즈 카탈로그에는 활성 플러그인 37개와 비활성 선택 변형 3개, 총 40개 플러그인의 검증된 번역 경로가 들어 있습니다. 40개 모두 UTF-8 fresh readback과 CP1252 legacy readback을 통과했습니다. v1.0.1부터는 패키지 용량을 줄이기 위해 130MB급 `FalloutNV.esm` xdelta를 제외하고 이 파일만 YesMan-AI/xEditLib 레코드 병합 경로를 사용하며, 나머지 39개는 xdelta3 빠른 패치를 유지합니다.
+2026-10-05 기준 v1.0.2 릴리즈 카탈로그에는 활성 플러그인 37개와 비활성 선택 변형 3개, 총 40개 플러그인의 검증된 번역 경로가 들어 있습니다. 40개 모두 UTF-8 fresh readback과 CP1252 legacy readback을 통과했으며, 기준 버전에서는 40/40 모두 xdelta3 빠른 경로를 사용할 수 있습니다.
 
-v1.0.0 테스트 VNV 설치에서는 최종 Output 74개 파일, 제외 0개와 40/40 `exact_source_verified_delta`를 확인했습니다. v1.0.1은 번역 데이터와 레코드 매핑은 그대로 유지하면서 `FalloutNV.esm`만 기존 검증된 YesMan-AI/xEditLib 병합 경로로 전환한 패키징 경량화 릴리즈입니다. 경량화 정책 테스트와 UTF-8/CP1252 Node 백엔드 로드 검증을 통과했습니다.
+v1.0.2에서는 대형 `FalloutNV.esm`의 xdelta source window를 파일 크기에 맞게 조정해 기존 약 124.5MiB delta를 약 2.34MiB로 줄였습니다. 기준 VNV 버전은 빠른 verified delta 경로를 사용하고, 업데이트로 원본 해시가 달라진 플러그인은 기존 YesMan-AI/xEditLib 레코드 병합 경로로 자동 전환합니다. xEditLib의 Documents/My Games, INI, plugins.txt, saves, cache, temp 경로도 패쳐의 임시 작업 폴더로 격리했습니다.
 
 라디오 표시 문자열은 `VNVKR UI Strings.esp`에 통합했고, 라디오 자막은 UTF-8 문자열을 그대로 보존하도록 수정한 `MojaveRadioCaptions.dll`을 함께 제공합니다. 로딩 스크린 메시지, UI GMST, Radio INFO 문자열도 같은 UI Strings 플러그인에 포함됩니다.
 
@@ -255,7 +255,7 @@ DLL 교체 뒤에는 반드시 게임을 완전히 종료한 뒤 다시 실행�
 
 ## 플러그인 처리 방식
 
-원본 SHA-256이 릴리즈 시 검증한 버전과 같으면 원칙적으로 xdelta3 빠른 경로를 사용합니다. 단, v1.0.1부터 `FalloutNV.esm`은 130MB급 delta를 배포하지 않고 레코드 병합 경로를 사용합니다. xdelta를 사용하는 플러그인은 복원된 ESP/ESM의 크기와 SHA-256을 다시 검사하므로 다른 바이트가 만들어지면 실패합니다.
+원본 SHA-256이 릴리즈 시 검증한 버전과 같으면 xdelta3 빠른 경로를 사용합니다. v1.0.2에서는 `FalloutNV.esm`도 최적화된 약 2.34MiB verified delta를 사용합니다. xdelta로 복원된 ESP/ESM은 크기와 SHA-256을 다시 검사하므로 검증된 결과와 다른 바이트가 만들어지면 실패합니다.
 
 VNV 업데이트 등으로 원본 해시가 달라진 플러그인은 YesMan-AI/xEditLib 레코드 병합 경로로 전환합니다. FormID/소유자/필드/현재 원문이 대응되는 번역만 적용하고 새 문구나 변경된 문구는 영어로 유지합니다. 개발용 정밀 검증에서는 전체 레코드와 헤더를 새 세션에서 다시 읽으며, xEdit 저장 시 TES4 ONAM의 순서만 재정렬되는 경우에는 구성원 집합이 동일한지 비교합니다.
 
@@ -265,9 +265,10 @@ CP1252 처리는 최종 게임 인코딩을 CP1252로 만들기 위한 것이 �
 
 ```powershell
 py -3 -m unittest discover -s tests -q
-py -3 vnvkr_output.py output --mo2-root "C:\Modlists\VNV" --profile "Viva New Vegas Extended" --catalog bundles/records-release-20261004 --output Output
+py -3 vnvkr_output.py output --mo2-root "C:\Modlists\VNV" --profile "Viva New Vegas Extended" --catalog bundles/records-release-20261005 --output Output
+.\tools\build_release.ps1
 ```
 
-릴리즈 제작용 주요 도구는 `tools/build_font_bundle.py`, `tools/add_verified_deltas.py`, `tools/verify_optional_variants.py`, `tools/add_optional_verified_deltas.py`, `tools/prepare_release_package.py`입니다. 생성 데이터와 대형 바이너리는 `.gitignore`에 의해 Git 소스 저장소에서 제외됩니다.
+현재 저장소에는 패쳐 본체, 릴리즈 빌드에 필요한 최소 도구, 회귀 테스트만 유지합니다. 일회성 번역 감사·프로브·카탈로그 제작 스크립트와 작업 중간 산출물은 Git 소스 저장소에서 제외했습니다.
 
-자세한 진행 기록은 `docs/progress.md`, KR-RADIO 병합 기준은 `docs/radio-compatibility.md`, 외부 도구/자료 출처는 `docs/sources.md`를 참고하세요.
+핵심 빌드 도구는 `tools/build_release.ps1`, `tools/prepare_release_package.py`, `tools/setup_xdelta.ps1`, `tools/setup_yesman_utf8_node.py`, `tools/yesman_text.cjs`입니다. 외부 도구와 자료 출처는 `docs/sources.md`를 참고하세요.
