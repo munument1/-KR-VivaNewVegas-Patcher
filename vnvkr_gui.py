@@ -63,7 +63,8 @@ class App:
                 messagebox.showerror('번역 데이터 확인', '검증된 TranslationData 폴더가 필요합니다. 패쳐와 함께 제공된 파일을 확인해주세요.')
                 return
         target = self.folder / 'Output'
-        if target.exists() or target.with_name(target.name + '.report.json').exists():
+        if (target.exists() or target.with_name(target.name + '.report.json').exists()
+                or target.with_name(target.name + '.report.txt').exists()):
             target = self.folder / ('Output-' + datetime.now().strftime('%Y%m%d-%H%M%S-%f'))
         self.generate.configure(state='disabled')
         self.browse.configure(state='disabled')
