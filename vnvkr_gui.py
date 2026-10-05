@@ -157,9 +157,10 @@ def packaged_self_test(mo2_root):
     with tempfile.TemporaryDirectory(prefix='vnvkr-packaged-selftest-') as tmp:
         output = Path(tmp) / 'Output'
         report = build_output(vnvkr.Installation(Path(mo2_root)), catalog, output)
-        fast = sum(row.get('status') == 'exact_source_verified_delta' for row in report['files'])
+        fast = sum(row.get('status') in {'exact_source_verified_delta', 'already_patched_verified'}
+                   for row in report['files'])
         if fast < 1 or not output.is_dir():
-            raise RuntimeError(f'Packaged fast path did not complete: {fast}')
+            raise RuntimeError(f'Packaged verified fast path did not complete: {fast}')
     return 0
 
 
