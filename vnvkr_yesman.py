@@ -101,11 +101,13 @@ def _session_plugins(installation, entries, source_overrides):
     return active[:max(positions) + 1] if positions else active
 
 
-def merge_plugins(installation, entries, catalog, job, source_overrides=None):
+def merge_plugins(installation, entries, catalog, job, source_overrides=None,
+                  fallback_mappings=None, inherit_targets=None):
     """Load current plugins, set matched display text, then verify a fresh load.
 
-    No plugin binary parser/writer is implemented here. The official native
-    library owns every plugin read and write, and receives only copied inputs.
+    fallback_mappings are used only for inherit_targets.  This lets a newly
+    discovered plugin inherit translations for exact official-master overrides
+    without treating unrelated/new records as translation failures.
     """
     runtime()  # Check availability before copying a large installation.
     job.mkdir()
@@ -113,6 +115,9 @@ def merge_plugins(installation, entries, catalog, job, source_overrides=None):
     data = game / 'Data'
     data.mkdir(parents=True)
     source_overrides = source_overrides or {}
+    fallback_mappings = fallback_mappings or []
+    inherit_targets = set(inherit_targets or ())
+    inherit_target_keys = {name.casefold() for name in inherit_targets}
     overrides = {name.casefold(): source for name, source in source_overrides.items()}
     plugins = _session_plugins(installation, entries, source_overrides)
     original_hashes = {}
@@ -125,11 +130,16 @@ def merge_plugins(installation, entries, catalog, job, source_overrides=None):
         for row in entry['mappings']:
             validate_mapping(row)
         maps[entry['path']] = entry['mappings']
+    for row in fallback_mappings:
+        validate_mapping(row)
     translated = job / 'Translated'
     request = {'game': str(game), 'plugins': plugins, 'targets': list(maps),
                'fields': catalog['plugin_fields'], 'mappings': maps, 'mode': 'apply',
                'includeRows': False, 'outDir': str(translated),
                'output': str(job / 'apply.json')}
+    if fallback_mappings and inherit_targets:
+        request['fallbackMappings'] = fallback_mappings
+        request['inheritTargets'] = sorted(inherit_targets)
     # Independent CP1252 snapshot checks the original legacy strings as well as
     # structures. UTF-8 alone collapses malformed/legacy bytes to U+FFFD.
     snapshot_request = {k: request[k] for k in ('game', 'plugins', 'targets', 'fields')}
@@ -140,6 +150,12 @@ def merge_plugins(installation, entries, catalog, job, source_overrides=None):
     snapshot_request.update(mode='snapshot', readCodepage=1252,
                             legacyRecordKeys=legacy_record_keys,
                             output=str(job / 'legacy-before.json'))
+    if fallback_mappings and inherit_targets:
+        snapshot_request['inheritTargets'] = sorted(inherit_targets)
+        snapshot_request['legacyFallbackRecordKeys'] = sorted({
+            '|'.join((row['owner'], row['id'], row['signature']))
+            for row in fallback_mappings
+        })
     legacy = run_adapter(snapshot_request, job, 'legacy-before')
     legacy_sources = {file['plugin']: file['rows'] for file in legacy['files']}
     request['legacySources'] = legacy_sources
@@ -150,9 +166,17 @@ def merge_plugins(installation, entries, catalog, job, source_overrides=None):
         plugin = file['plugin']
         expected[plugin] = file['beforeHashes']
         changes[plugin] = file['changed']
-        stats[plugin] = {'translated': len(file['changed']), 'unmatched': len(file['missing']),
+        inherited = sum(row.get('mappingOrigin') == 'base_inherited' for row in file['changed'])
+        stats[plugin] = {'translated': len(file['changed']), 'inherited_translated': inherited,
+                         'catalog_translated': len(file['changed']) - inherited,
+                         'unmatched': len(file['missing']),
                          'unmatched_entries': file['missing'], 'records_verified': len(file['beforeHashes'])}
         shutil.copyfile(translated / plugin, data / plugin)
+    # Fallback tables are needed only during apply.  Verification uses the exact
+    # list of recorded changes and keeping the large translation memory out of
+    # verify requests materially reduces disk and JSON overhead.
+    request.pop('fallbackMappings', None)
+    request.pop('inheritTargets', None)
     request.update(mode='verify', expected=expected, changes=changes,
                    expectedHeaders={file['plugin']: file['headerHash'] for file in applied['files']},
                    includeRows=False, output=str(job / 'verify.json'))
@@ -166,9 +190,12 @@ def merge_plugins(installation, entries, catalog, job, source_overrides=None):
                    expected={file['plugin']: file['beforeHashes'] for file in legacy['files']},
                    expectedHeaders={file['plugin']: file['headerHash'] for file in legacy['files']})
     run_adapter(request, job, 'legacy-verify')
-    for values in stats.values():
+    for plugin, values in stats.items():
         values['verification'] = 'UTF8_and_CP1252_fresh_readback; header_records_and_unmodified_text'
+        if plugin.casefold() in inherit_target_keys:
+            values['translation_source'] = 'fixed_esm_record_inheritance'
     for source, before in original_hashes.items():
         if vnvkr.sha256(source) != before:
             raise ValueError(f'Source changed during generation: {source}')
     return translated, stats
+
