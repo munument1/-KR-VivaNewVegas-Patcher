@@ -438,8 +438,11 @@ def build_output(installation, catalog_dir, output):
                                          if e.get('optional') else f"active/{e['path']}")}
                                for e in catalog['files']])
 
-    inherited_entries, discovery_skipped = discover_new_plugin_entries(installation, catalog)
-    inheritance_memory = base_translation_memory(catalog) if inherited_entries else []
+    inheritance_memory = base_translation_memory(catalog)
+    if inheritance_memory:
+        inherited_entries, discovery_skipped = discover_new_plugin_entries(installation, catalog)
+    else:
+        inherited_entries, discovery_skipped = [], []
     work_entries = [*catalog['files'], *inherited_entries]
     inherit_targets = {entry['path'] for entry in inherited_entries}
 
@@ -449,7 +452,7 @@ def build_output(installation, catalog_dir, output):
               'install_state': 'manual_copy_required', 'game_validation': 'not_run',
               'updated_plugin_backend': catalog.get('updated_plugin_backend', 'not_available'),
               'auto_inheritance': {
-                  'enabled': True,
+                  'enabled': bool(inheritance_memory),
                   'source_masters': sorted(BASE_TRANSLATION_MASTERS),
                   'translation_memory_rows': len(inheritance_memory),
                   'discovered_active_plugins': len(inherited_entries) + len(discovery_skipped),
