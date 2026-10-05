@@ -313,8 +313,11 @@ def build_output(installation, catalog_dir, output):
                     report['skipped'].append({'path': entry['path'], 'provider': entry['provider'], 'reason': 'not_installed'})
                     continue
             else:
-                if not chain or (entry['kind'] in {'plugin-copy', 'plugin-records'} and key not in installation.active_keys):
-                    report['skipped'].append({'path': entry['path'], 'reason': 'not_enabled_or_not_installed'})
+                if not chain:
+                    report['skipped'].append({'path': entry['path'], 'reason': 'not_installed'})
+                    continue
+                if entry['kind'] in {'plugin-copy', 'plugin-records'} and key not in installation.active_keys:
+                    report['skipped'].append({'path': entry['path'], 'reason': 'not_enabled'})
                     continue
                 source = installation.source(entry['path'])
             original_hash = vnvkr.sha256(source)
