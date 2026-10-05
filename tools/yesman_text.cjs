@@ -130,10 +130,10 @@ function savePreservingReferences(file, target, plugins) {
     if(failure)throw failure;
   }
 }
-function destinations(item, candidates) {
+function destinations(item, candidates, exactOnly=false) {
   const same=candidates.filter(c=>c.field===item.field && c.source===item.source);
   const exact=same.filter(c=>c.path===item.path);
-  return new Set((exact.length ? exact : same).map(c=>c.dest));
+  return new Set((exactOnly ? exact : (exact.length ? exact : same)).map(c=>c.dest));
 }
 async function main() {
   const request=json(process.argv[2]);
@@ -145,6 +145,13 @@ async function main() {
     throw new Error('Run mutations with the isolated UTF-8 Node runtime');
   x.loadPlugins(request.plugins.join('\n'),true,false); await x.waitForLoader();
   const result={engine:'YesManAI/xEditLib',acp,files:[]};
+  const fallbackByRecord=new Map();
+  for(const mapping of request.fallbackMappings || []) {
+    if(typeof mapping.dest!=='string' || mapping.dest.includes('\uFFFD')) throw new Error('Invalid fallback translation text');
+    const k=key(mapping); if(!fallbackByRecord.has(k))fallbackByRecord.set(k,[]); fallbackByRecord.get(k).push(mapping);
+  }
+  const inheritTargets=new Set((request.inheritTargets || []).map(name=>name.toLowerCase()));
+  const legacyFallbackRecordKeys=new Set(request.legacyFallbackRecordKeys || []);
   for (const plugin of request.targets || request.plugins) {
     const file=x.fileByName(plugin), rows=[], structures=[], changed=[], missing=[], beforeHashes=[];
     const headerHash=headerDigest(file);
@@ -161,6 +168,7 @@ async function main() {
     const mappings=request.mappings && request.mappings[plugin] || [];
     const legacyRows=new Map((request.legacySources?.[plugin] || []).map(r=>[key(r)+'|'+r.path,r]));
     const legacyRecordKeys=new Set(request.legacyRecordKeys?.[plugin] || []);
+    const inheritanceAllowed=inheritTargets.has(plugin.toLowerCase());
     const byRecord=new Map();
     for(const mapping of mappings) {
       if(typeof mapping.dest!=='string' || mapping.dest.includes('\uFFFD')) throw new Error('Invalid translation text');
@@ -181,7 +189,8 @@ async function main() {
         if(signature!=='TES4') {
           const ident=identity(file,record), recordKey=key(ident);
           const wantsRows=request.includeRows!==false &&
-            (!request.legacyRecordKeys || legacyRecordKeys.has(recordKey));
+            (!request.legacyRecordKeys || legacyRecordKeys.has(recordKey) ||
+             (inheritanceAllowed && legacyFallbackRecordKeys.has(recordKey)));
           const needsItems=request.structures || wantsRows || request.mode==='apply';
           let edid='';
           if(needsItems && x.hasElement(record,'EDID')) edid=x.getValue(record,'EDID');
@@ -200,12 +209,27 @@ async function main() {
             }
             if(wantsRows) rows.push(row);
             if(request.mode==='apply') {
-              const possible=destinations(row,byRecord.get(key(row)) || []);
-              if(possible.size!==1) {missing.push({...row,reason:possible.size ? 'ambiguous' : 'unmatched'});continue;}
+              let candidates=byRecord.get(recordKey) || [], mappingOrigin='catalog', exactOnly=false;
+              if(!candidates.length && inheritanceAllowed) {
+                const inherited=(fallbackByRecord.get(recordKey) || [])
+                  .filter(candidate=>candidate.field===row.field && candidate.path===row.path);
+                // No Fixed ESM translation exists for this field, so this is not
+                // an inheritance failure and should not inflate the untranslated count.
+                if(!inherited.length)continue;
+                candidates=inherited; mappingOrigin='base_inherited'; exactOnly=true;
+              }
+              const possible=destinations(row,candidates,exactOnly);
+              if(possible.size!==1) {
+                const reason=mappingOrigin==='base_inherited'
+                  ? (possible.size ? 'base_inheritance_ambiguous' : 'base_record_text_changed')
+                  : (possible.size ? 'ambiguous' : 'unmatched');
+                missing.push({...row,reason,mappingOrigin}); continue;
+              }
               const dest=[...possible][0];
               if(dest!==row.source) {
-                if(row.source.includes('\uFFFD')) {missing.push({...row,reason:'source_encoding_unreadable'});continue;}
-                x.setValue(record,row.path,dest); updates.push({...row,dest,...(nativeSource!==row.source ? {nativeSource} : {})});
+                if(row.source.includes('\uFFFD')) {missing.push({...row,reason:'source_encoding_unreadable',mappingOrigin});continue;}
+                x.setValue(record,row.path,dest);
+                updates.push({...row,dest,mappingOrigin,...(nativeSource!==row.source ? {nativeSource} : {})});
               }
             }
           }
