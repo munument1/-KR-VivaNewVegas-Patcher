@@ -20,6 +20,165 @@ from tools.loose_translation import TOKEN, decode, json_values
 
 SCHEMA = 1
 
+BASE_TRANSLATION_MASTERS = {
+    'falloutnv.esm', 'deadmoney.esm', 'honesthearts.esm', 'oldworldblues.esm',
+    'lonesomeroad.esm', 'gunrunnersarsenal.esm', 'classicpack.esm',
+    'mercenarypack.esm', 'tribalpack.esm', 'caravanpack.esm',
+}
+PLUGIN_SUFFIXES = {'.esm', '.esp'}
+
+
+def base_translation_memory(catalog):
+    """Return conflict-free translations taken only from the official master entries.
+
+    These rows are safe candidates for newly discovered plugins because xEditLib
+    still requires the original owner/FormID/signature/field/path/source to match.
+    """
+    destinations = defaultdict(set)
+    templates = {}
+    for entry in catalog.get('files', []):
+        if entry.get('kind') != 'plugin-records' or entry.get('path', '').casefold() not in BASE_TRANSLATION_MASTERS:
+            continue
+        for row in entry.get('mappings', []):
+            if row.get('owner', '').casefold() not in BASE_TRANSLATION_MASTERS:
+                continue
+            if row.get('source') == row.get('dest'):
+                continue
+            identity = (row['owner'].casefold(), row['id'], row['signature'],
+                        row['field'], row['path'], row['source'])
+            destinations[identity].add(row['dest'])
+            templates.setdefault(identity, row)
+    memory = []
+    for identity, values in destinations.items():
+        if len(values) != 1:
+            continue
+        row = templates[identity]
+        memory.append({key: row[key] for key in ('owner', 'id', 'signature', 'field', 'path', 'source')} |
+                      {'dest': next(iter(values))})
+    return memory
+
+
+def runtime_plugin_keys(catalog):
+    return {vnvkr.virtual_path(plugin).casefold()
+            for spec in catalog.get('runtime_mods', [])
+            for plugin in spec.get('plugins', [])}
+
+
+def discover_new_plugin_entries(installation, catalog):
+    """Find active plugins unknown to this release, without touching runtime KR plugins."""
+    known = {entry['path'].casefold() for entry in catalog.get('files', [])
+             if entry.get('kind') in {'plugin-copy', 'plugin-records'}}
+    ignored = runtime_plugin_keys(catalog)
+    entries, skipped = [], []
+    for plugin in installation.active:
+        key = plugin.casefold()
+        if key in known or key in ignored:
+            continue
+        chain = installation.providers.get(key)
+        if not chain:
+            skipped.append({'path': plugin, 'reason': 'new_plugin_provider_missing',
+                            'discovered_plugin': True, 'translation_applied': False})
+            continue
+        source = Path(chain[-1]['physical']).resolve()
+        if not source.is_relative_to(installation.root):
+            skipped.append({'path': plugin, 'provider': chain[-1]['provider'],
+                            'reason': 'new_plugin_outside_mo2',
+                            'discovered_plugin': True, 'translation_applied': False})
+            continue
+        entries.append({'path': plugin, 'kind': 'plugin-records',
+                        'baseline_sha256': vnvkr.sha256(source), 'mappings': [],
+                        'auto_inherited': True})
+    return entries, skipped
+
+
+def plugin_outcomes(report):
+    """Normalize plugin results into categories used by JSON, text report and GUI."""
+    outcomes = []
+    for row in report.get('files', []):
+        if Path(row.get('path', '')).suffix.casefold() not in PLUGIN_SUFFIXES:
+            continue
+        if row.get('discovered_plugin'):
+            category = 'new_inherited'
+        elif row.get('source_updated'):
+            if row.get('translated', 0) == 0:
+                category = 'updated_untranslated'
+            elif row.get('unmatched', 0):
+                category = 'updated_partial'
+            else:
+                category = 'updated_patched'
+        else:
+            category = 'patched'
+        outcomes.append({'path': row['path'], 'category': category,
+                         'translated': row.get('translated', 0),
+                         'unmatched': row.get('unmatched', 0),
+                         'status': row.get('status'),
+                         'provider': row.get('provider')})
+    skipped_categories = {
+        'not_installed': 'removed',
+        'not_enabled': 'disabled',
+        'updated_plugin_needs_record_backend': 'updated_untranslated',
+        'new_plugin_no_base_translation_match': 'new_no_match',
+        'new_plugin_provider_missing': 'new_unavailable',
+        'new_plugin_outside_mo2': 'new_unavailable',
+    }
+    for row in report.get('skipped', []):
+        if Path(row.get('path', '')).suffix.casefold() not in PLUGIN_SUFFIXES:
+            continue
+        category = skipped_categories.get(row.get('reason'))
+        if not category:
+            continue
+        outcomes.append({'path': row['path'], 'category': category,
+                         'translated': row.get('translated', 0),
+                         'unmatched': row.get('unmatched', row.get('base_record_mismatches', 0)),
+                         'reason': row.get('reason'), 'provider': row.get('provider')})
+    return outcomes
+
+
+def format_plugin_report(report):
+    labels = [
+        ('patched', '정상 패치'),
+        ('updated_patched', '업데이트 감지 - 번역 전체 적용'),
+        ('updated_partial', '업데이트 감지 - 일부 문구 미적용'),
+        ('updated_untranslated', '업데이트 감지 - 한글 적용 없음'),
+        ('removed', '이번 설치에서 제거됨 - 번역 플러그인 생성 안 함'),
+        ('disabled', '설치되어 있지만 비활성 - 생성 안 함'),
+        ('new_inherited', '신규 플러그인 - Fixed ESM 동일 레코드 번역 상속'),
+        ('new_no_match', '신규 플러그인 - 상속 가능한 동일 레코드 없음'),
+        ('new_unavailable', '신규 플러그인 - 소스에 접근할 수 없어 건너뜀'),
+    ]
+    grouped = defaultdict(list)
+    for row in report.get('plugin_outcomes', []):
+        grouped[row['category']].append(row)
+    lines = [
+        'Viva New Vegas 한국어 패쳐 결과',
+        f"프로필: {report.get('profile', '')}",
+        f"생성 시각(UTC): {report.get('created_utc', '')}",
+        '',
+    ]
+    for category, title in labels:
+        rows = grouped.get(category, [])
+        lines.append(f'[{title}] {len(rows)}개')
+        if not rows:
+            lines.append('- 없음')
+        for row in rows:
+            details = []
+            if row.get('translated'):
+                details.append(f"번역 {row['translated']}개")
+            if row.get('unmatched'):
+                details.append(f"미대응 {row['unmatched']}개")
+            if row.get('provider'):
+                details.append(f"원본 모드: {row['provider']}")
+            suffix = ' · ' + ' · '.join(details) if details else ''
+            lines.append(f"- {row['path']}{suffix}")
+        lines.append('')
+    lines.extend([
+        '신규 플러그인 자동 상속은 FalloutNV.esm 및 공식 DLC ESM의 검증된 번역만 사용합니다.',
+        '원 소유자, FormID, 레코드 타입, 필드 경로, 현재 영문 원문이 모두 일치할 때만 번역합니다.',
+        '모드가 원문을 변경한 레코드는 자동 번역하지 않습니다.',
+        '',
+    ])
+    return '\n'.join(lines)
+
 
 def stable_context(obj, pointer):
     """Use setting bindings when present; otherwise MCM's persistent object ID."""
