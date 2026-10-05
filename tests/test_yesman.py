@@ -4,6 +4,7 @@ from pathlib import Path
 import shutil
 import tempfile
 import unittest
+from unittest import mock
 from types import SimpleNamespace
 
 import vnvkr_yesman as backend
@@ -45,6 +46,60 @@ class PipelinePlanningTests(unittest.TestCase):
         plugins = backend._session_plugins(
             installation, [{'path': 'Optional.esp'}], {'Optional.esp': Path('optional')})
         self.assertEqual(plugins, ['FalloutNV.esm', 'YUP.esm', 'Optional.esp'])
+
+    def test_inheritance_memory_is_apply_only_and_counted_separately(self):
+        with tempfile.TemporaryDirectory(prefix='VNV inheritance plan ') as temp:
+            root = Path(temp)
+            sources = root / 'sources'
+            sources.mkdir()
+            (sources / 'FalloutNV.esm').write_bytes(b'base')
+            (sources / 'NewPatch.esp').write_bytes(b'new')
+            installation = SimpleNamespace(
+                active=['FalloutNV.esm', 'NewPatch.esp'],
+                source=lambda name: sources / name)
+            entries = [{'path': 'NewPatch.esp', 'mappings': []}]
+            fallback = [self._inheritance_row()]
+            phases = []
+
+            def fake_adapter(request, job, phase):
+                phases.append((phase, copy.deepcopy(request)))
+                common = {'plugin': 'NewPatch.esp', 'masters': ['FalloutNV.esm'],
+                          'headerHash': 'header', 'rows': [], 'beforeHashes': [
+                              {'owner': 'falloutnv.esm', 'id': '123456',
+                               'signature': 'MESG', 'hash': '0' * 64}]}
+                if phase == 'legacy-before':
+                    return {'files': [common]}
+                if phase == 'apply':
+                    translated = Path(request['outDir'])
+                    translated.mkdir(parents=True, exist_ok=True)
+                    (translated / 'NewPatch.esp').write_bytes(b'new translated')
+                    return {'files': [{**common, 'changed': [{**fallback[0],
+                                      'mappingOrigin': 'base_inherited'}], 'missing': []}]}
+                return {'files': [common]}
+
+            with mock.patch.object(backend, 'runtime'), mock.patch.object(
+                    backend, 'run_adapter', side_effect=fake_adapter):
+                translated, stats = backend.merge_plugins(
+                    installation, entries, {'plugin_fields': {'MESG': ['DESC']}},
+                    root / 'job', fallback_mappings=fallback,
+                    inherit_targets={'NewPatch.esp'})
+            by_phase = {phase: request for phase, request in phases}
+            self.assertNotIn('fallbackMappings', by_phase['legacy-before'])
+            self.assertEqual(by_phase['legacy-before']['inheritTargets'], ['NewPatch.esp'])
+            self.assertTrue(by_phase['legacy-before']['legacyFallbackRecordKeys'])
+            self.assertEqual(by_phase['apply']['fallbackMappings'], fallback)
+            self.assertEqual(by_phase['apply']['inheritTargets'], ['NewPatch.esp'])
+            self.assertNotIn('fallbackMappings', by_phase['verify'])
+            self.assertEqual(stats['NewPatch.esp']['translated'], 1)
+            self.assertEqual(stats['NewPatch.esp']['inherited_translated'], 1)
+            self.assertEqual(stats['NewPatch.esp']['catalog_translated'], 0)
+            self.assertTrue((translated / 'NewPatch.esp').is_file())
+
+    @staticmethod
+    def _inheritance_row():
+        return {'owner': 'falloutnv.esm', 'id': '123456', 'signature': 'MESG',
+                'field': 'DESC', 'path': 'DESC', 'source': 'Vanilla text',
+                'dest': '기본 번역'}
 
     def test_xedit_paths_are_isolated_inside_job(self):
         with tempfile.TemporaryDirectory(prefix='VNV xEdit isolation ') as temp:
