@@ -72,7 +72,7 @@ def discover_new_plugin_entries(installation, catalog):
     entries, skipped = [], []
     for plugin in installation.active:
         key = plugin.casefold()
-        if key in known or key in ignored:
+        if key in known or key in ignored or key in BASE_TRANSLATION_MASTERS:
             continue
         chain = installation.providers.get(key)
         if not chain:
