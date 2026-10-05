@@ -423,7 +423,7 @@ def verified_delta(entry, catalog_dir, source):
     return {'mode': 'delta', 'patch': patch, 'spec': spec}
 
 
-def build_output(installation, catalog_dir, output):
+def build_output(installation, catalog_dir, output, progress=None):
     output = output.resolve()
     installation.guard_output(output)
     # This interface prepares manual overwrite files outside MO2, never a live mod.
@@ -444,6 +444,11 @@ def build_output(installation, catalog_dir, output):
                                          if e.get('optional') else f"active/{e['path']}")}
                                for e in catalog['files']])
 
+    def emit(message):
+        if progress:
+            progress(message)
+
+    emit('VNV 프로필과 현재 플러그인을 확인하고 있습니다.')
     inheritance_memory = base_translation_memory(catalog)
     if inheritance_memory:
         inherited_entries, discovery_skipped = discover_new_plugin_entries(installation, catalog)
@@ -482,9 +487,11 @@ def build_output(installation, catalog_dir, output):
         native_entries = [entry for entry in active_native if entry['path'].casefold() not in fast_native]
         native_files, native_stats = (None, {})
         if native_entries:
+            emit(f'업데이트된 플러그인 {len(native_entries)}개를 레코드 단위로 처리합니다.')
             native_files, native_stats = vnvkr_yesman.merge_plugins(
                 installation, native_entries, catalog, Path(tmp) / 'NativeJob',
-                fallback_mappings=inheritance_memory, inherit_targets=inherit_targets)
+                fallback_mappings=inheritance_memory, inherit_targets=inherit_targets,
+                progress=progress)
         delta_engine = None
         for entry in work_entries:
             key = entry['path'].casefold()
@@ -542,9 +549,10 @@ def build_output(installation, catalog_dir, output):
                     if entry.get('optional'):
                         # A same-name inactive variant gets its own copied session.
                         # Never swap a live provider or alter profile activation.
+                        emit(f'선택 플러그인 {entry["path"]}을(를) 레코드 단위로 처리합니다.')
                         optional_files, optional_stats = vnvkr_yesman.merge_plugins(
                             installation, [entry], catalog, Path(tmp) / f'OptionalJob{len(seen)}',
-                            source_overrides={entry['path']: source})
+                            source_overrides={entry['path']: source}, progress=progress)
                         native_source, statistics = optional_files / entry['path'], optional_stats[entry['path']]
                     else:
                         native_source, statistics = native_files / entry['path'], native_stats[entry['path']]

@@ -41,6 +41,7 @@ class ReleasePackagingTests(unittest.TestCase):
             self.assertNotIn('verified_delta', updated['files'][0])
             self.assertEqual(updated['files'][0]['mappings'], [{'source': 'A', 'dest': '가'}])
             self.assertIn('verified_delta', updated['files'][1])
+            self.assertEqual(updated['verified_delta_files'], 1)
             self.assertFalse(large.exists())
             self.assertTrue(small.exists())
 

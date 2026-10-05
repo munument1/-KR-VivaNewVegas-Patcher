@@ -102,7 +102,7 @@ def _session_plugins(installation, entries, source_overrides):
 
 
 def merge_plugins(installation, entries, catalog, job, source_overrides=None,
-                  fallback_mappings=None, inherit_targets=None):
+                  fallback_mappings=None, inherit_targets=None, progress=None):
     """Load current plugins, set matched display text, then verify a fresh load.
 
     fallback_mappings are used only for inherit_targets.  This lets a newly
@@ -110,6 +110,9 @@ def merge_plugins(installation, entries, catalog, job, source_overrides=None,
     without treating unrelated/new records as translation failures.
     """
     runtime()  # Check availability before copying a large installation.
+    def emit(message):
+        if progress:
+            progress(message)
     job.mkdir()
     game = job / 'Game'
     data = game / 'Data'
@@ -118,6 +121,10 @@ def merge_plugins(installation, entries, catalog, job, source_overrides=None,
     fallback_mappings = fallback_mappings or []
     inherit_targets = set(inherit_targets or ())
     inherit_target_keys = {name.casefold() for name in inherit_targets}
+    # The official-master translation memory can exceed 80k rows. It is only
+    # consumed when a newly discovered plugin actually needs inheritance, so do
+    # not validate or serialize that table on ordinary updated-plugin runs.
+    active_fallback_mappings = fallback_mappings if inherit_targets else []
     overrides = {name.casefold(): source for name, source in source_overrides.items()}
     plugins = _session_plugins(installation, entries, source_overrides)
     original_hashes = {}
@@ -130,16 +137,11 @@ def merge_plugins(installation, entries, catalog, job, source_overrides=None,
         for row in entry['mappings']:
             validate_mapping(row)
         maps[entry['path']] = entry['mappings']
-    for row in fallback_mappings:
-        validate_mapping(row)
     translated = job / 'Translated'
     request = {'game': str(game), 'plugins': plugins, 'targets': list(maps),
                'fields': catalog['plugin_fields'], 'mappings': maps, 'mode': 'apply',
                'includeRows': False, 'outDir': str(translated),
                'output': str(job / 'apply.json')}
-    if fallback_mappings and inherit_targets:
-        request['fallbackMappings'] = fallback_mappings
-        request['inheritTargets'] = sorted(inherit_targets)
     # Independent CP1252 snapshot checks the original legacy strings as well as
     # structures. UTF-8 alone collapses malformed/legacy bytes to U+FFFD.
     snapshot_request = {k: request[k] for k in ('game', 'plugins', 'targets', 'fields')}
@@ -150,27 +152,55 @@ def merge_plugins(installation, entries, catalog, job, source_overrides=None,
     snapshot_request.update(mode='snapshot', readCodepage=1252,
                             legacyRecordKeys=legacy_record_keys,
                             output=str(job / 'legacy-before.json'))
-    if fallback_mappings and inherit_targets:
+    if active_fallback_mappings:
         snapshot_request['inheritTargets'] = sorted(inherit_targets)
         snapshot_request['legacyFallbackRecordKeys'] = sorted({
             '|'.join((row['owner'], row['id'], row['signature']))
-            for row in fallback_mappings
+            for row in active_fallback_mappings
         })
+    emit('업데이트 플러그인: 레거시 문자열/레코드 인덱스를 확인하고 있습니다.')
     legacy = run_adapter(snapshot_request, job, 'legacy-before')
     legacy_sources = {file['plugin']: file['rows'] for file in legacy['files']}
     request['legacySources'] = legacy_sources
+    legacy_indexes = {file['plugin']: file['recordIndexHash'] for file in legacy['files']}
+    if active_fallback_mappings:
+        # xTranslator-style candidate narrowing: the CP1252 snapshot already
+        # enumerated every target record for structural verification.  Keep only
+        # official-master translation rows whose owner/FormID/signature actually
+        # exists in a discovered plugin before serializing the apply request.
+        present_records = {
+            '|'.join((row['owner'], row['id'], row['signature']))
+            for file in legacy['files']
+            if file['plugin'].casefold() in inherit_target_keys
+            for row in file['beforeHashes']
+        }
+        narrowed_fallback = [
+            row for row in active_fallback_mappings
+            if '|'.join((row['owner'], row['id'], row['signature'])) in present_records
+        ]
+        for row in narrowed_fallback:
+            validate_mapping(row)
+        if narrowed_fallback:
+            request['fallbackMappings'] = narrowed_fallback
+            request['inheritTargets'] = sorted(inherit_targets)
+    emit('업데이트 플러그인: 현재 버전에 한국어를 적용하고 있습니다.')
     applied = run_adapter(request, job, 'apply')
     expected, changes = {}, {}
     stats = {}
+    applied_indexes = {}
     for file in applied['files']:
         plugin = file['plugin']
+        if file['recordIndexHash'] != legacy_indexes[plugin]:
+            raise ValueError(f'Record index changed before save: {plugin}')
         expected[plugin] = file['beforeHashes']
+        applied_indexes[plugin] = file['recordIndexHash']
         changes[plugin] = file['changed']
         inherited = sum(row.get('mappingOrigin') == 'base_inherited' for row in file['changed'])
         stats[plugin] = {'translated': len(file['changed']), 'inherited_translated': inherited,
                          'catalog_translated': len(file['changed']) - inherited,
-                         'unmatched': len(file['missing']),
-                         'unmatched_entries': file['missing'], 'records_verified': len(file['beforeHashes'])}
+                         'unmatched': len(file['missing']), 'unmatched_entries': file['missing'],
+                         'records_verified': len(file['beforeHashes']),
+                         'records_indexed': file['recordCount']}
         shutil.copyfile(translated / plugin, data / plugin)
     # Fallback tables are needed only during apply.  Verification uses the exact
     # list of recorded changes and keeping the large translation memory out of
@@ -179,8 +209,10 @@ def merge_plugins(installation, entries, catalog, job, source_overrides=None,
     request.pop('inheritTargets', None)
     request.update(mode='verify', expected=expected, changes=changes,
                    expectedHeaders={file['plugin']: file['headerHash'] for file in applied['files']},
+                   expectedRecordIndexes=applied_indexes,
                    includeRows=False, output=str(job / 'verify.json'))
     request.pop('outDir')
+    emit('업데이트 플러그인: UTF-8 저장 결과를 검증하고 있습니다.')
     verified = run_adapter(request, job, 'verify')
     by_name = {file['plugin']: file for file in verified['files']}
     for file in applied['files']:
@@ -188,10 +220,12 @@ def merge_plugins(installation, entries, catalog, job, source_overrides=None,
             raise ValueError('Master list changed during translation')
     request.update(mode='verifyLegacy', readCodepage=1252, output=str(job / 'legacy-verify.json'),
                    expected={file['plugin']: file['beforeHashes'] for file in legacy['files']},
-                   expectedHeaders={file['plugin']: file['headerHash'] for file in legacy['files']})
+                   expectedHeaders={file['plugin']: file['headerHash'] for file in legacy['files']},
+                   expectedRecordIndexes=legacy_indexes)
+    emit('업데이트 플러그인: 레거시 문자열 보존을 최종 검증하고 있습니다.')
     run_adapter(request, job, 'legacy-verify')
     for plugin, values in stats.items():
-        values['verification'] = 'UTF8_and_CP1252_fresh_readback; header_records_and_unmodified_text'
+        values['verification'] = 'UTF8_and_CP1252_fresh_readback; fast_record_index + exact_target_record_hashes'
         if plugin.casefold() in inherit_target_keys:
             values['translation_source'] = 'fixed_esm_record_inheritance'
     for source, before in original_hashes.items():

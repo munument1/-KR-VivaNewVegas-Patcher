@@ -118,7 +118,7 @@ class OutputTests(unittest.TestCase):
                           'plugin_fields': {'MESG': ['DESC']}})
 
         def fake_merge(installation, entries, catalog, job, source_overrides=None,
-                       fallback_mappings=None, inherit_targets=None):
+                       fallback_mappings=None, inherit_targets=None, progress=None):
             self.assertEqual(inherit_targets, {'New VNV Patch.esp'})
             self.assertEqual(fallback_mappings, [base_mapping])
             translated = job / 'Translated'

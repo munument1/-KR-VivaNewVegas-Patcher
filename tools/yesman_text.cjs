@@ -9,14 +9,15 @@ function fieldName(handle) {
   const match = /^([A-Z0-9_]{4})(?: -|$)/.exec(x.name(handle));
   return match ? match[1] : null;
 }
+const FLAT_SIGNATURES=new Set(['CELL','WRLD','REFR','ACRE','ACTI','ARMO','ARMA','WEAP','MISC','KEYM',
+  'ALCH','CLAS','RACE','HDPT','HAIR','EYES','CSNO','AMEF','REPU','RCCT','FURN','MSET','COBJ','IMOD',
+  'CMNY','LIGH','GMST','PROJ','CCRD','DOOR','NPC_','CREA','CONT','ENCH','TACT','MGEF','AMMO','CDCK',
+  'BOOK','RCPE','MSTT','CHAL','INGR','CHIP','SPEL','NOTE','EXPL','DIAL','LSCR','WATR','ALOC']);
+const DISPLAY_CONTAINERS=new Set(['XMRK','EPFT','RDAT']);
 function textFields(record, wanted) {
   const found=[];
   const signature=x.signature(record);
-  const flatSignatures=new Set(['CELL','WRLD','REFR','ACRE','ACTI','ARMO','ARMA','WEAP','MISC','KEYM',
-    'ALCH','CLAS','RACE','HDPT','HAIR','EYES','CSNO','AMEF','REPU','RCCT','FURN','MSET','COBJ','IMOD',
-    'CMNY','LIGH','GMST','PROJ','CCRD','DOOR','NPC_','CREA','CONT','ENCH','TACT','MGEF','AMMO','CDCK',
-    'BOOK','RCPE','MSTT','CHAL','INGR','CHIP','SPEL','NOTE','EXPL','DIAL','LSCR','WATR','ALOC']);
-  if(flatSignatures.has(signature)) {
+  if(FLAT_SIGNATURES.has(signature)) {
     for(const field of wanted) {
       const paths=signature==='REFR' && field==='FULL' ? ['FULL','XMRK\\FULL'] :
         signature==='NOTE' && field==='TNAM' ? ['TNAM\\Text'] : [field];
@@ -32,7 +33,6 @@ function textFields(record, wanted) {
   // Only these named binary containers can enclose the selected display fields.
   // Other named subrecords (DATA physics, CTDA conditions, SCHR script metadata)
   // cannot contain these text fields and need no recursive text traversal.
-  const displayContainers=new Set(['XMRK','EPFT','RDAT']);
   function walk(handle, inherited=null, prefix='') {
     let children;
     try {children=x.getElements(handle);} catch {return;}
@@ -46,7 +46,7 @@ function textFields(record, wanted) {
       if (field && wanted.has(field) && [3,4].includes(x.valueType(child))) {
         found.push({field,path:relative,source:x.getValue(child)});
       } else if ([9,10,11].includes(x.valueType(child)) &&
-                 (!namedField || wanted.has(namedField) || displayContainers.has(namedField))) walk(child,field,relative);
+                 (!namedField || wanted.has(namedField) || DISPLAY_CONTAINERS.has(namedField))) walk(child,field,relative);
       x.release(child);
     }
   }
@@ -145,6 +145,7 @@ async function main() {
     throw new Error('Run mutations with the isolated UTF-8 Node runtime');
   x.loadPlugins(request.plugins.join('\n'),true,false); await x.waitForLoader();
   const result={engine:'YesManAI/xEditLib',acp,files:[]};
+  const fieldSets=new Map(Object.entries(request.fields || {}).map(([signature,fields])=>[signature,new Set(fields)]));
   const fallbackByRecord=new Map();
   for(const mapping of request.fallbackMappings || []) {
     if(typeof mapping.dest!=='string' || mapping.dest.includes('\uFFFD')) throw new Error('Invalid fallback translation text');
@@ -174,10 +175,12 @@ async function main() {
       if(typeof mapping.dest!=='string' || mapping.dest.includes('\uFFFD')) throw new Error('Invalid translation text');
       const k=key(mapping); if(!byRecord.has(k))byRecord.set(k,[]); byRecord.get(k).push(mapping);
     }
-    // Apply/readback visit every record, including signatures without display
-    // fields. This verifies untouched scripts, references and gameplay records.
+    // xTranslator-inspired fast record index: visit every record in every phase,
+    // but reserve expensive full JSON hashing for translation-relevant records.
+    // The full-file audit still verifies the owner/FormID/signature set.
     const allRecords=['apply','verify','snapshot','verifyLegacy'].includes(request.mode) ? x.getRecords(file,'',true) : null;
     const groups=allRecords ? [['*',allRecords]] : Object.keys(request.fields).map(signature=>[signature,null]);
+    const recordIndexKeys=[];
     for (const [group,all] of groups) {
       const signature=group;
       if (signature==='TES4') continue; // author/description metadata is not game UI.
@@ -188,17 +191,28 @@ async function main() {
         const signature=x.signature(record), fields=request.fields[signature] || [];
         if(signature!=='TES4') {
           const ident=identity(file,record), recordKey=key(ident);
+          recordIndexKeys.push(recordKey);
           const wantsRows=request.includeRows!==false &&
             (!request.legacyRecordKeys || legacyRecordKeys.has(recordKey) ||
              (inheritanceAllowed && legacyFallbackRecordKeys.has(recordKey)));
-          const needsItems=request.structures || wantsRows || request.mode==='apply';
+          const hasMapping=byRecord.has(recordKey) || (inheritanceAllowed && fallbackByRecord.has(recordKey));
+          const prior=expected.get(recordKey);
+          if(['verify','verifyLegacy'].includes(request.mode) && !prior) {
+            x.release(record);
+            continue;
+          }
+          // Expensive recursive text discovery runs only where text can be read,
+          // translated, snapshotted, or structurally verified.
+          const needsItems=request.structures || wantsRows || (request.mode==='apply' && hasMapping);
           let edid='';
           if(needsItems && x.hasElement(record,'EDID')) edid=x.getValue(record,'EDID');
-          const items=needsItems && (signature!=='GMST' || edid.startsWith('s')) && fields.length ?
-            textFields(record,new Set(fields)) : [];
+          const wanted=fieldSets.get(signature);
+          const items=needsItems && wanted && (signature!=='GMST' || edid.startsWith('s')) ?
+            textFields(record,wanted) : [];
           if(request.structures && items.length) structures.push({...ident,json:recordJson(record)});
           let originalDigest;
-          if(['apply','snapshot'].includes(request.mode)) originalDigest=digest(record);
+          if((request.mode==='apply' && hasMapping) || (request.mode==='snapshot' && wantsRows))
+            originalDigest=digest(record);
           const updates=[];
           for(const item of items) {
             const row={...ident,edid,...item};
@@ -234,16 +248,17 @@ async function main() {
             }
           }
           if(request.mode==='apply') {
-            // Revert only edited text and compare xEdit's full record serialization.
-            for(const update of updates)x.setValue(record,update.path,update.nativeSource ?? update.source);
-            if(updates.length && digest(record)!==originalDigest)throw new Error('Unexpected non-text mutation '+key(ident));
-            for(const update of updates)x.setValue(record,update.path,update.dest);
-            changed.push(...updates); beforeHashes.push({...ident,hash:originalDigest});
+            if(hasMapping) {
+              // Revert only edited text and compare xEdit's full record serialization.
+              for(const update of updates)x.setValue(record,update.path,update.nativeSource ?? update.source);
+              if(updates.length && digest(record)!==originalDigest)throw new Error('Unexpected non-text mutation '+key(ident));
+              for(const update of updates)x.setValue(record,update.path,update.dest);
+              beforeHashes.push({...ident,hash:originalDigest});
+            }
+            changed.push(...updates);
           } else if(request.mode==='snapshot') {
-            beforeHashes.push({...ident,hash:originalDigest});
+            if(wantsRows) beforeHashes.push({...ident,hash:originalDigest});
           } else if(['verify','verifyLegacy'].includes(request.mode)) {
-            const prior=expected.get(key(ident));
-            if(!prior)throw new Error('Unexpected record in readback '+key(ident));
             verified.add(key(ident));
             const updates=expectedChanges.get(key(ident)) || [];
             for(const update of updates) {
@@ -263,6 +278,10 @@ async function main() {
       }
     }
     if(['verify','verifyLegacy'].includes(request.mode) && verified.size!==expected.size)throw new Error('Records missing from readback '+plugin);
+    recordIndexKeys.sort();
+    const recordIndexHash=crypto.createHash('sha256').update(recordIndexKeys.join('\n')).digest('hex');
+    if(request.expectedRecordIndexes?.[plugin] && recordIndexHash!==request.expectedRecordIndexes[plugin])
+      throw new Error('Record index readback mismatch '+plugin);
     if(request.mode==='apply') {
       fs.mkdirSync(request.outDir,{recursive:true});
       const target=path.join(path.resolve(request.outDir),plugin);
@@ -270,7 +289,8 @@ async function main() {
       const saveAudit=savePreservingReferences(file,target,request.plugins);
       console.log(JSON.stringify({plugin,...saveAudit}));
     }
-    result.files.push({plugin,masters:x.getMasterNames(file),headerHash,rows,
+    result.files.push({plugin,masters:x.getMasterNames(file),headerHash,recordIndexHash,
+      recordCount:recordIndexKeys.length,rows,
       ...(request.structures ? {structures} : {}),
       ...(request.mode==='apply' ? {changed,missing,beforeHashes} : {}),
       ...(request.mode==='snapshot' ? {beforeHashes} : {})}); x.release(file);

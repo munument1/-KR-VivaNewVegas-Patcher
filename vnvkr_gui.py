@@ -75,7 +75,9 @@ class App:
 
         def run():
             try:
-                report = build_output(vnvkr.Installation(root), catalog, target)
+                report = build_output(
+                    vnvkr.Installation(root), catalog, target,
+                    progress=lambda message: self.events.put(('status', message)))
                 self.events.put(('done', target, report))
             except Exception as error:
                 self.events.put(('error', str(error)))
@@ -87,6 +89,10 @@ class App:
         except queue.Empty:
             pass
         else:
+            if event[0] == 'status':
+                self.status.set(event[1])
+                self.window.after(150, self.poll)
+                return
             self.generate.configure(state='normal')
             self.browse.configure(state='normal')
             if event[0] == 'error':
@@ -143,8 +149,15 @@ def packaged_self_test(mo2_root):
     metadata = vnvkr.read_json(catalog / 'catalog.json')
     native = [entry for entry in metadata['files'] if entry.get('kind') == 'plugin-records']
     verified = [entry for entry in native if entry.get('verified_delta')]
-    if len(verified) != len(native) or metadata.get('verified_delta_files') != len(verified):
-        raise RuntimeError('Packaged release is missing one or more verified fast deltas')
+    fallback_only = [entry for entry in native if not entry.get('verified_delta')]
+    unsafe_fallback = [entry['path'] for entry in fallback_only if not entry.get('mappings')]
+    if unsafe_fallback:
+        raise RuntimeError(f'Packaged release is missing a safe fallback path: {unsafe_fallback}')
+    if not verified:
+        raise RuntimeError('Packaged release has no verified fast deltas')
+    packaged_count = metadata.get('verified_delta_files')
+    if packaged_count is not None and packaged_count != len(verified):
+        raise RuntimeError('verified_delta_files metadata does not match the packaged catalog')
     for entry in verified:
         spec = entry['verified_delta']
         payload = vnvkr.contained(catalog, spec['payload'])

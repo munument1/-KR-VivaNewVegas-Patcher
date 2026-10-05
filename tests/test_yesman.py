@@ -58,13 +58,18 @@ class PipelinePlanningTests(unittest.TestCase):
                 active=['FalloutNV.esm', 'NewPatch.esp'],
                 source=lambda name: sources / name)
             entries = [{'path': 'NewPatch.esp', 'mappings': []}]
-            fallback = [self._inheritance_row()]
+            fallback = [
+                self._inheritance_row(),
+                {**self._inheritance_row(), 'id': '654321',
+                 'source': 'Unrelated vanilla text', 'dest': '무관한 번역'},
+            ]
             phases = []
 
             def fake_adapter(request, job, phase):
                 phases.append((phase, copy.deepcopy(request)))
                 common = {'plugin': 'NewPatch.esp', 'masters': ['FalloutNV.esm'],
-                          'headerHash': 'header', 'rows': [], 'beforeHashes': [
+                          'headerHash': 'header', 'recordIndexHash': 'index',
+                          'recordCount': 1, 'rows': [], 'beforeHashes': [
                               {'owner': 'falloutnv.esm', 'id': '123456',
                                'signature': 'MESG', 'hash': '0' * 64}]}
                 if phase == 'legacy-before':
@@ -86,8 +91,8 @@ class PipelinePlanningTests(unittest.TestCase):
             by_phase = {phase: request for phase, request in phases}
             self.assertNotIn('fallbackMappings', by_phase['legacy-before'])
             self.assertEqual(by_phase['legacy-before']['inheritTargets'], ['NewPatch.esp'])
-            self.assertTrue(by_phase['legacy-before']['legacyFallbackRecordKeys'])
-            self.assertEqual(by_phase['apply']['fallbackMappings'], fallback)
+            self.assertEqual(len(by_phase['legacy-before']['legacyFallbackRecordKeys']), 2)
+            self.assertEqual(by_phase['apply']['fallbackMappings'], fallback[:1])
             self.assertEqual(by_phase['apply']['inheritTargets'], ['NewPatch.esp'])
             self.assertNotIn('fallbackMappings', by_phase['verify'])
             self.assertEqual(stats['NewPatch.esp']['translated'], 1)

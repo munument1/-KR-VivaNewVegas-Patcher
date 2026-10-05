@@ -4,9 +4,9 @@ Viva New Vegas(VNV)용 한국어 Output 생성기입니다. 사용자가 VNV MO2
 
 ## 현재 상태
 
-2026-10-05 기준 v1.0.2 릴리즈 카탈로그에는 활성 플러그인 37개와 비활성 선택 변형 3개, 총 40개 플러그인의 검증된 번역 경로가 들어 있습니다. 40개 모두 UTF-8 fresh readback과 CP1252 legacy readback을 통과했으며, 기준 버전에서는 40/40 모두 xdelta3 빠른 경로를 사용할 수 있습니다.
+2026-10-05 기준 v1.0.4 릴리즈는 활성 플러그인 37개와 비활성 선택 변형 3개, 총 40개 플러그인의 검증된 번역 경로를 사용합니다. 패키지에서는 39개 플러그인이 verified xdelta 빠른 경로를 사용하고, 대형 `FalloutNV.esm`은 레코드 병합 경로를 사용합니다.
 
-v1.0.2에서는 대형 `FalloutNV.esm`의 xdelta source window를 파일 크기에 맞게 조정해 기존 약 124.5MiB delta를 약 2.34MiB로 줄였습니다. 기준 VNV 버전은 빠른 verified delta 경로를 사용하고, 업데이트로 원본 해시가 달라진 플러그인은 기존 YesMan-AI/xEditLib 레코드 병합 경로로 자동 전환합니다. xEditLib의 Documents/My Games, INI, plugins.txt, saves, cache, temp 경로도 패쳐의 임시 작업 폴더로 격리했습니다.
+v1.0.4에서는 xTranslator의 빠른 레코드 탐색 구조를 참고해 YesMan/xEditLib 병합 백엔드를 최적화했습니다. 전체 레코드는 `owner + FormID + signature` 기반 Fast Record Index로 저장 전후 동일성을 검증하고, 실제 번역 대상 레코드만 전체 구조 해시로 정밀 검증합니다. 번역 후보가 없는 레코드는 불필요한 문자열 재귀 탐색을 건너뛰며, 신규 플러그인 상속도 85,080행 전체 번역 메모리를 그대로 넘기지 않고 실제 존재하는 레코드 후보로 좁힌 뒤 적용합니다. 현재 VNV 테스트 환경에서는 316MB `FalloutNV.esm`을 포함한 전체 Output 생성이 약 121초에 완료됐습니다. GUI에는 레거시 확인, 번역 적용, UTF-8 검증, 최종 검증 단계별 진행 상태도 표시합니다.
 
 라디오 표시 문자열은 `VNVKR UI Strings.esp`에 통합했고, 라디오 자막은 UTF-8 문자열을 그대로 보존하도록 수정한 `MojaveRadioCaptions.dll`을 함께 제공합니다. 로딩 스크린 메시지, UI GMST, Radio INFO 문자열도 같은 UI Strings 플러그인에 포함됩니다.
 
@@ -81,7 +81,7 @@ C:\Games\Steam\steamapps\common\Fallout New Vegas
 
 패쳐는 현재 VNV 프로필과 설치된 파일을 읽어서 별도의 `Output` 폴더를 만듭니다. 이 단계에서는 VNV 원본을 직접 수정하지 않습니다.
 
-정상적인 VNV 버전에서는 대부분의 검증된 플러그인이 xdelta3 빠른 경로를 사용합니다. `FalloutNV.esm`은 v1.0.1부터 패키지 용량 절감을 위해 항상 YesMan-AI/xEditLib 레코드 병합 경로를 사용합니다. 다른 플러그인도 VNV 업데이트 등으로 원본 해시가 달라지면 같은 병합 경로로 전환합니다.
+정상적인 VNV 버전에서는 39개 검증 플러그인이 xdelta3 빠른 경로를 사용합니다. `FalloutNV.esm`은 패키지 용량을 줄이기 위해 YesMan/xEditLib 레코드 병합 경로를 사용하며, 다른 플러그인도 VNV 업데이트 등으로 원본 해시가 달라지면 같은 병합 경로로 자동 전환합니다.
 
 ### 4. Output을 VNV에 복사
 
@@ -276,7 +276,7 @@ DLL 교체 뒤에는 반드시 게임을 완전히 종료한 뒤 다시 실행�
 
 ## 플러그인 처리 방식
 
-원본 SHA-256이 릴리즈 시 검증한 버전과 같으면 xdelta3 빠른 경로를 사용합니다. v1.0.2에서는 `FalloutNV.esm`도 최적화된 약 2.34MiB verified delta를 사용합니다. xdelta로 복원된 ESP/ESM은 크기와 SHA-256을 다시 검사하므로 검증된 결과와 다른 바이트가 만들어지면 실패합니다.
+원본 SHA-256이 릴리즈 시 검증한 버전과 같으면 xdelta3 빠른 경로를 사용합니다. v1.0.4 패키지에서는 대형 `FalloutNV.esm`은 레코드 병합 경로를 사용하고, 나머지 검증 플러그인은 가능한 경우 xdelta 빠른 경로를 사용합니다. xdelta로 복원된 ESP/ESM은 크기와 SHA-256을 다시 검사하므로 검증된 결과와 다른 바이트가 만들어지면 실패합니다.
 
 VNV 업데이트 등으로 원본 해시가 달라진 플러그인은 YesMan-AI/xEditLib 레코드 병합 경로로 전환합니다. FormID/소유자/필드/현재 원문이 대응되는 번역만 적용하고 새 문구나 변경된 문구는 영어로 유지합니다. 개발용 정밀 검증에서는 전체 레코드와 헤더를 새 세션에서 다시 읽으며, xEdit 저장 시 TES4 ONAM의 순서만 재정렬되는 경우에는 구성원 집합이 동일한지 비교합니다.
 

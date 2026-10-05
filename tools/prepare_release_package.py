@@ -37,6 +37,10 @@ def strip_oversized_verified_deltas(data: Path, limit: int = MAX_PACKAGED_DELTA_
         del entry['verified_delta']
     for payload in {payload for _, payload, _ in oversized}:
         payload.unlink()
+    catalog['verified_delta_files'] = sum(
+        bool(entry.get('verified_delta'))
+        for entry in catalog.get('files', [])
+        if entry.get('kind') == 'plugin-records')
     vnvkr.write_json(catalog_path, catalog)
     return removed
 
@@ -66,11 +70,12 @@ def main():
     catalog = vnvkr.read_json(a.catalog / 'catalog.json')
     native = [entry for entry in catalog['files'] if entry.get('kind') == 'plugin-records']
     verified = [entry for entry in native if entry.get('verified_delta')]
-    if len(verified) != len(native):
-        missing = [entry['path'] for entry in native if not entry.get('verified_delta')]
-        raise ValueError(f'Release catalog is missing verified fast deltas: {missing}')
-    if catalog.get('verified_delta_files') != len(verified):
-        raise ValueError('verified_delta_files metadata does not match the release catalog')
+    missing = [entry for entry in native if not entry.get('verified_delta')]
+    # A plugin may intentionally ship without an xdelta fast path as long as it
+    # retains record mappings for the native xEditLib merge fallback.
+    invalid_missing = [entry['path'] for entry in missing if not entry.get('mappings')]
+    if invalid_missing:
+        raise ValueError(f'Release catalog has no delta or record mappings: {invalid_missing}')
     for entry in verified:
         spec = entry['verified_delta']
         payload = vnvkr.contained(a.catalog, spec['payload'])
@@ -81,6 +86,12 @@ def main():
     for path in (data,backend):
         if path.exists(): shutil.rmtree(path)
     shutil.copytree(a.catalog,data)
+    packaged_catalog = vnvkr.read_json(data / 'catalog.json')
+    packaged_catalog['verified_delta_files'] = sum(
+        bool(entry.get('verified_delta'))
+        for entry in packaged_catalog.get('files', [])
+        if entry.get('kind') == 'plugin-records')
+    vnvkr.write_json(data / 'catalog.json', packaged_catalog)
     stripped_deltas = strip_oversized_verified_deltas(data)
     backend.mkdir()
     copies=[
