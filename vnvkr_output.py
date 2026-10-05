@@ -424,8 +424,11 @@ def build_output(installation, catalog_dir, output):
     if output.is_relative_to(installation.root) or output.is_relative_to(installation.mods):
         raise ValueError('Output must be outside the MO2 installation and mods directories')
     report_path = output.with_name(output.name + '.report.json')
+    report_text_path = output.with_name(output.name + '.report.txt')
     if report_path.exists():
         raise FileExistsError(report_path)
+    if report_text_path.exists():
+        raise FileExistsError(report_text_path)
     catalog = vnvkr.read_json(catalog_dir / 'catalog.json')
     if catalog.get('schema_version') != SCHEMA:
         raise ValueError('Unsupported catalog format')
@@ -434,17 +437,30 @@ def build_output(installation, catalog_dir, output):
         vnvkr.validate_entries([{'path': (f"optional/{vnvkr.virtual_path(e['provider'])}/{e['path']}"
                                          if e.get('optional') else f"active/{e['path']}")}
                                for e in catalog['files']])
+
+    inherited_entries, discovery_skipped = discover_new_plugin_entries(installation, catalog)
+    inheritance_memory = base_translation_memory(catalog) if inherited_entries else []
+    work_entries = [*catalog['files'], *inherited_entries]
+    inherit_targets = {entry['path'] for entry in inherited_entries}
+
     report = {'mo2_root': str(installation.root), 'profile': installation.profile,
               'output': str(output), 'created_utc': datetime.now(timezone.utc).isoformat(),
-              'files': [], 'skipped': [], 'warnings': installation.warnings,
+              'files': [], 'skipped': list(discovery_skipped), 'warnings': installation.warnings,
               'install_state': 'manual_copy_required', 'game_validation': 'not_run',
-              'updated_plugin_backend': catalog.get('updated_plugin_backend', 'not_available')}
+              'updated_plugin_backend': catalog.get('updated_plugin_backend', 'not_available'),
+              'auto_inheritance': {
+                  'enabled': True,
+                  'source_masters': sorted(BASE_TRANSLATION_MASTERS),
+                  'translation_memory_rows': len(inheritance_memory),
+                  'discovered_active_plugins': len(inherited_entries) + len(discovery_skipped),
+                  'safety': 'owner+FormID+signature+field+exact_path+current_source must match',
+              }}
     output.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix='.vnvkr-output-', dir=output.parent) as tmp:
         stage = Path(tmp) / 'Output'
         stage.mkdir()
         seen = set()
-        active_native = [entry for entry in catalog['files'] if entry['kind'] == 'plugin-records'
+        active_native = [entry for entry in work_entries if entry['kind'] == 'plugin-records'
                          and not entry.get('optional')
                          and entry['path'].casefold() in installation.active_keys
                          and entry['path'].casefold() in installation.providers]
@@ -457,10 +473,11 @@ def build_output(installation, catalog_dir, output):
         native_entries = [entry for entry in active_native if entry['path'].casefold() not in fast_native]
         native_files, native_stats = (None, {})
         if native_entries:
-            native_files, native_stats = vnvkr_yesman.merge_plugins(installation, native_entries, catalog,
-                                                                   Path(tmp) / 'NativeJob')
+            native_files, native_stats = vnvkr_yesman.merge_plugins(
+                installation, native_entries, catalog, Path(tmp) / 'NativeJob',
+                fallback_mappings=inheritance_memory, inherit_targets=inherit_targets)
         delta_engine = None
-        for entry in catalog['files']:
+        for entry in work_entries:
             key = entry['path'].casefold()
             chain = installation.providers.get(key)
             if entry.get('optional'):
@@ -488,6 +505,8 @@ def build_output(installation, catalog_dir, output):
             result = {'path': entry['path'], 'output_path': relative,
                       'provider': chain[-1]['provider'], 'source_sha256': original_hash,
                       'source_updated': original_hash != entry['baseline_sha256']}
+            if entry.get('auto_inherited'):
+                result.update(discovered_plugin=True, translation_source='fixed_esm_record_inheritance')
             if entry['kind'] == 'plugin-records':
                 fast = (verified_delta(entry, catalog_dir, source) if entry.get('optional')
                         else fast_native.get(key))
@@ -514,9 +533,20 @@ def build_output(installation, catalog_dir, output):
                         native_source, statistics = optional_files / entry['path'], optional_stats[entry['path']]
                     else:
                         native_source, statistics = native_files / entry['path'], native_stats[entry['path']]
+                    if entry.get('auto_inherited') and statistics.get('translated', 0) == 0:
+                        report['skipped'].append({
+                            **result, **statistics,
+                            'reason': 'new_plugin_no_base_translation_match',
+                            'base_record_mismatches': statistics.get('unmatched', 0),
+                            'translation_applied': False,
+                        })
+                        continue
                     target.parent.mkdir(parents=True, exist_ok=True)
                     shutil.copyfile(native_source, target)
-                    result.update(statistics, status='matched_text_only; native_readback_verified')
+                    status = ('auto_inherited_base_records; native_readback_verified'
+                              if entry.get('auto_inherited')
+                              else 'matched_text_only; native_readback_verified')
+                    result.update(statistics, status=status)
             elif entry['kind'] == 'plugin-copy':
                 payload = vnvkr.contained(catalog_dir, entry['payload'])
                 if vnvkr.sha256(payload) != entry['payload_sha256']:
@@ -555,14 +585,17 @@ def build_output(installation, catalog_dir, output):
             report['runtime_mods'] = runtime_status
         if not report['files']:
             raise ValueError('No applicable translation files; no Output was published')
+        report['plugin_outcomes'] = plugin_outcomes(report)
+        report['report_json'] = str(report_path)
+        report['report_text'] = str(report_text_path)
         # Read back every artifact before publishing the tree.
         for row in report['files']:
             if vnvkr.sha256(vnvkr.contained(stage, row['output_path'])) != row['output_sha256']:
                 raise ValueError('Output readback failed')
         stage.rename(output)
     vnvkr.write_json(report_path, report)
+    report_text_path.write_text(format_plugin_report(report), encoding='utf-8-sig')
     return report
-
 
 def build_runtime_mods(installation, catalog_dir, specs, stage, seen):
     """Publish small Korean runtime mods that do not replace existing VNV providers."""
