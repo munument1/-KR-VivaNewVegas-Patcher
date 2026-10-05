@@ -111,9 +111,10 @@ class App:
                 if plugins:
                     activation += '\nMO2 플러그인 목록에서 다음 ESP도 체크해주세요: ' + ', '.join(plugins)
                 plugin_summary = (
-                    f"플러그인: 정상 {count('patched')} · 업데이트 전체적용 {count('updated_patched')} · "
-                    f"업데이트 일부미적용 {count('updated_partial')} · 업데이트 미적용 {count('updated_untranslated')} · "
-                    f"제거 {count('removed')} · 신규상속 {count('new_inherited')} · 신규미대응 {count('new_no_match')}"
+                    f"플러그인: 정상 {count('patched')} · 이미적용 {count('already_patched')} · "
+                    f"업데이트 전체적용 {count('updated_patched')} · 업데이트 일부미적용 {count('updated_partial')} · "
+                    f"업데이트 미적용 {count('updated_untranslated')} · 제거 {count('removed')} · "
+                    f"신규상속 {count('new_inherited')} · 신규미대응 {count('new_no_match')}"
                 )
                 self.status.set(f"{len(report['files'])}개 파일 생성 완료 · 미대응 항목 {unmatched}개 · 제외 파일 {len(report['skipped'])}개\n"
                                 f"{plugin_summary}\n{self.output}\n"
