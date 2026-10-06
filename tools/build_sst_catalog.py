@@ -12,6 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 import vnvkr
+import vnvkr_xedit
 from vnvkr_sst import read_sst
 
 FLAT_SIGNATURES = {
@@ -79,6 +80,7 @@ def export_for_entry(sst_path: Path, old_entry: dict):
         'zero_form_skipped': 0,
         'pathless_direct': 0,
         'old_or_unchanged_skipped': 0,
+        'unsafe_mapping_skipped': 0,
     }
     for item in sst.entries:
         if not _usable(item):
@@ -108,7 +110,7 @@ def export_for_entry(sst_path: Path, old_entry: dict):
             # an exact path, so pathless rows are never used for inheritance.
             path = ''
             stats['pathless_direct'] += 1
-        rows.append({
+        row = {
             'owner': owner.casefold(),
             'id': form_id,
             'signature': signature,
@@ -120,7 +122,16 @@ def export_for_entry(sst_path: Path, old_entry: dict):
             'rec_id_max': item.rec_id_max,
             'string_id': item.string_id,
             'origin': 'sst_direct',
-        })
+        }
+        try:
+            vnvkr_xedit.validate_mapping(row)
+        except ValueError:
+            # Keep the release conservative. SST rows that alter printf/font
+            # control tokens are reported for dictionary cleanup instead of
+            # aborting the user's whole patch run.
+            stats['unsafe_mapping_skipped'] += 1
+            continue
+        rows.append(row)
         stats['mapped'] += 1
     return rows, stats, sst
 
@@ -232,6 +243,7 @@ def main():
         'direct_mappings': sum(x['mappings'] for x in plugin_stats),
         'pathless_direct_rows': sum(x.get('pathless_direct', 0) for x in plugin_stats),
         'zero_form_skipped': sum(x.get('zero_form_skipped', 0) for x in plugin_stats),
+        'unsafe_mapping_skipped': sum(x.get('unsafe_mapping_skipped', 0) for x in plugin_stats),
         'output': str(out),
     }
     vnvkr.write_json(out / 'sst-build-report.json', report)
