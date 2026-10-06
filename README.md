@@ -2,6 +2,15 @@
 
 Viva New Vegas(VNV)의 **현재 MO2/VFS에서 실제로 이기는 파일**을 기준으로 한국어 Output을 만드는 패쳐입니다. 원본 VNV 설치는 직접 수정하지 않습니다.
 
+## v1.0.6.1 변경점
+
+v1.0.6.1은 여러 ESP/ESM을 한 번에 처리할 때 XEditLib이 재사용한 파일 핸들을 이전 플러그인 메타데이터로 잘못 해석할 수 있던 문제를 수정합니다.
+
+- 플러그인별로 FormID 소유자/마스터 식별 캐시를 새로 생성
+- DLC와 후순위 플러그인에서 정상 SST 매핑이 `direct_sst_no_match`로 빠지던 문제 수정
+- Old World Blues의 `Claustrophobia`, `Early Bird`, `Skilled` 등 특성(PERK) 포함 DLC 문자열 재검증
+- 새 VNV 실환경 전체 Output 생성 및 fresh readback 검증 통과
+
 ## v1.0.6 변경점
 
 v1.0.6부터 플러그인 번역 데이터의 기준을 **xTranslator SST**로 통일했습니다.

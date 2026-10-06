@@ -248,7 +248,6 @@ def run(request: dict):
         raise RuntimeError('VNVKR XEdit worker must run with UTF-8 active code page')
 
     x = XEditLib(dll)
-    identities = IdentityCache(x)
     game = Path(request['game']).resolve()
     fallback_targets = {x.lower() for x in request.get('fallbackTargets', [])}
     fallback_by_record = {}
@@ -268,6 +267,9 @@ def run(request: dict):
 
         targets = request.get('targets') or request['plugins']
         for plugin in targets:
+            # XEditLib may recycle numeric handles after Release(). Never keep
+            # file metadata cached across target files under the old handle.
+            identities = IdentityCache(x)
             file_handle = x.file_by_name(plugin)
             rows, changed, missing, before_hashes = [], [], [], []
             try:
