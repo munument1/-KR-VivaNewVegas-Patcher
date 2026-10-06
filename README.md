@@ -1,306 +1,158 @@
 # Viva New Vegas 한국어 패쳐
 
-Viva New Vegas(VNV)용 한국어 Output 생성기입니다. 사용자가 VNV MO2 폴더를 지정하면 현재 프로필의 파일을 읽어 별도의 `Output`을 만들며, 원본 게임/VNV 설치 파일을 직접 수정하지 않습니다.
+Viva New Vegas(VNV)의 **현재 MO2/VFS에서 실제로 이기는 파일**을 기준으로 한국어 Output을 만드는 패쳐입니다. 원본 VNV 설치는 직접 수정하지 않습니다.
 
-## 현재 상태
+## v1.0.6 변경점
 
-2026-10-06 기준 v1.0.5 릴리즈는 활성 플러그인 37개와 비활성 선택 변형 3개, 총 40개 플러그인의 검증된 번역 경로를 사용합니다. 현재 MO2 제공 파일의 해시가 검증된 소스와 정확히 일치하면 xdelta 빠른 경로를 사용하고, 그 외에는 YesMan/xEditLib 레코드 병합 경로로 전환합니다.
+v1.0.6부터 플러그인 번역 데이터의 기준을 **xTranslator SST**로 통일했습니다.
 
-v1.0.4에서는 xTranslator의 빠른 레코드 탐색 구조를 참고해 YesMan/xEditLib 병합 백엔드를 최적화했습니다. 전체 레코드는 `owner + FormID + signature` 기반 Fast Record Index로 저장 전후 동일성을 검증하고, 실제 번역 대상 레코드만 전체 구조 해시로 정밀 검증합니다. 번역 후보가 없는 레코드는 불필요한 문자열 재귀 탐색을 건너뛰며, 신규 플러그인 상속도 85,080행 전체 번역 메모리를 그대로 넘기지 않고 실제 존재하는 레코드 후보로 좁힌 뒤 적용합니다. 현재 VNV 테스트 환경에서는 316MB `FalloutNV.esm`을 포함한 전체 Output 생성이 약 121초에 완료됐습니다. GUI에는 레거시 확인, 번역 적용, UTF-8 검증, 최종 검증 단계별 진행 상태도 표시합니다.
+- 전용 SST가 있는 플러그인: 해당 SST를 우선 적용
+- 전용 SST가 없는 플러그인: FalloutNV + 공식 DLC SST에서 정확히 일치하는 override 문자열만 fallback
+- direct SST와 fallback이 동시에 가능한 경우 direct SST가 우선
+- `owner + FormID + record signature + field + path + 현재 영문 원문`이 일치할 때만 번역
+- 새 문구나 모드가 변경한 영문 문구는 추측 번역하지 않음
 
-v1.0.5에서는 번역 대상 ESP/ESM의 원본을 **현재 MO2 프로필의 실제 제공 파일에서만** 읽도록 수정했습니다. 게임 설치 폴더의 `Data`는 Fallout: New Vegas 설치 확인에만 사용하며 번역 소스로 사용하지 않습니다. 따라서 `FalloutNV.esm`과 공식 DLC/팩 ESM은 활성화된 `Fixed ESMs` 모드의 파일을 기준으로 번역되어, Fixed ESMs의 정리/수정 내용을 보존합니다. `Fixed ESMs` 제공자를 찾을 수 없으면 게임 원본 ESM으로 자동 대체하지 않고 명확한 오류를 표시합니다.
+플러그인 처리 백엔드도 바뀌었습니다.
 
-라디오 표시 문자열은 `VNVKR UI Strings.esp`에 통합했고, 라디오 자막은 UTF-8 문자열을 그대로 보존하도록 수정한 `MojaveRadioCaptions.dll`을 함께 제공합니다. 로딩 스크린 메시지, UI GMST, Radio INFO 문자열도 같은 UI Strings 플러그인에 포함됩니다.
+- **Node.js 제거**
+- **Koffi 제거**
+- **YesMan 어댑터 제거**
+- **xdelta 빠른 경로 제거**
+- Python 워커가 `ctypes`로 `XEditLib.dll`을 직접 호출
+- 전체 플러그인을 CP1252/UTF-8로 반복 검증하던 4단계 경로 제거
+- UTF-8 적용 1회 + 저장본 fresh readback 1회로 단순화
 
-패쳐는 작업이 끝나면 `Output.report.json`과 `Output.report.txt`를 생성합니다. 보고서에서는 정상 패치, 업데이트 후 전체 적용, 업데이트 후 일부 문구 미적용, 업데이트 후 한글 적용 없음, VNV에서 제거된 플러그인, 비활성 플러그인, 새로 발견된 플러그인의 Fixed ESM 번역 상속 결과를 구분해 확인할 수 있습니다.
+저장본 재검증에서는 마스터 순서, 플러그인 헤더, 전체 레코드 인덱스, 실제 수정 레코드의 비문자 구조가 유지되는지 확인합니다. UTF-8 로드에서 `�`가 발생한 문자열은 자동 번역하지 않습니다.
 
-현재 릴리즈 카탈로그에 없는 활성 ESP/ESM도 자동 검사합니다. 새 플러그인이 `FalloutNV.esm` 또는 공식 DLC ESM의 레코드를 그대로 오버라이드하고, 원 소유자/FormID/레코드 타입/필드 경로/현재 영문 원문이 모두 검증된 Fixed ESM 번역과 일치할 때만 해당 필드의 한국어를 상속합니다. 모드가 원문을 변경했거나 동일성이 확실하지 않은 레코드는 자동 번역하지 않습니다.
+## 번역 범위
 
-## 설치 전 준비
+패쳐가 번역 대상으로 다루는 것은 다음 세 종류입니다.
 
-다음이 먼저 준비되어 있어야 합니다.
+1. 현재 MO2 프로필의 **ESP/ESM 플러그인**
+2. **MCM JSON** — 직접 표시 문자열은 JSON 안에서 병합하고, `$키` 방식은 대응 Translation INI를 사용
+3. **Translations 계열 텍스트** — New Vegas에서 실제 사용하는 `MCM/Translations/*.ini`와 모드별 `config/*_Translations.ini` 등
 
-- 정상 설치된 **[Viva New Vegas](https://vivanewvegas.moddinglinked.com/intro.html)**
-- **[Mod Organizer 2(MO2)](https://github.com/ModOrganizer2/modorganizer/releases)** 기반 VNV 설치
-- **[tNVSE 71 이상](https://www.nexusmods.com/newvegas/mods/95088)**
-- VNV에서 사용하는 **[UIO(User Interface Organizer)](https://www.nexusmods.com/newvegas/mods/57174)** 구성
-- 게임과 MO2를 완전히 종료한 상태
+한국어 출력에 필요한 폰트 설정은 지원 파일로 유지할 수 있지만, 기존 별도 라디오 DLL·번역 텍스처 같은 런타임 오버레이는 v1.0.6 SST 패쳐의 번역 범위에서 제외합니다.
 
-패쳐는 tNVSE DLL 자체를 배포하지 않습니다. 기존 VNV 설치에 tNVSE가 정상 동작하는 상태에서 사용하는 것을 전제로 합니다.
+## 플러그인 원본 선택
 
-가능하면 설치 전 MO2 폴더를 백업하거나, 최소한 현재 프로필과 중요한 사용자 설정을 백업하는 것을 권장합니다.
+패쳐는 `ModOrganizer.ini`에서 현재 프로필과 실제 Mods 경로를 읽고 MO2의 VFS 우선순위를 그대로 따릅니다. 게임 `Data`를 최하위 provider로 보고, 활성화된 MO2 모드가 같은 경로를 제공하면 그 파일이 우선합니다.
 
-## 설치 방법
-
-### 1. 릴리즈 파일 받기
-
-GitHub Releases에서 최신 `VNVKoreanPatcher-YYYYMMDD.zip`을 받은 뒤 원하는 폴더에 압축을 풉니다.
-
-압축 안에는 대략 다음과 같은 구조가 있습니다.
+특히 공식 ESM은 다음 원칙을 따릅니다.
 
 ```text
-VNVKoreanPatcher/
-├─ VNVKoreanPatcher.exe
-├─ TranslationData/
-└─ Backend/
+게임 설치 폴더\Data\FalloutNV.esm     ← 최하위 provider
+MO2\mods\Fixed ESMs\FalloutNV.esm    ← 실제 winner
+MO2\mods\Fixed ESMs\DeadMoney.esm
+MO2\mods\Fixed ESMs\HonestHearts.esm
+...
+
+게임 설치 폴더\Data\ClassicPack.esm   ← stock VNV에서는 이것이 실제 source
+게임 설치 폴더\Data\MercenaryPack.esm
+게임 설치 폴더\Data\TribalPack.esm
+게임 설치 폴더\Data\CaravanPack.esm
 ```
 
-`TranslationData`와 `Backend` 폴더는 EXE 옆에 그대로 있어야 합니다. 파일만 따로 빼서 실행하지 마세요.
+따라서 `FalloutNV.esm`, `DeadMoney.esm`, `HonestHearts.esm`, `OldWorldBlues.esm`, `LonesomeRoad.esm`, `GunRunnersArsenal.esm`은 `Fixed ESMs`의 정리/수정본을 사용합니다. 반면 새 VNV 설치 기준 `ClassicPack.esm`, `MercenaryPack.esm`, `TribalPack.esm`, `CaravanPack.esm`은 `Fixed ESMs`에 없으므로 게임 `Data`의 파일이 정상 source입니다. 이 네 파일의 번역본은 게임 폴더에 쓰지 않고 Output의 `Fixed ESMs` 폴더에 넣어 MO2가 덮어쓰게 합니다.
 
-### 2. 패쳐 실행
+MO2의 `mods`, `profiles`, `overwrite`가 `ModOrganizer.ini`와 다른 드라이브에 있어도 지원합니다.
 
-`VNVKoreanPatcher.exe`를 실행합니다.
+## SST 적용 방식
 
-패쳐에서 **VNV의 MO2 루트 폴더**를 지정합니다.
+예를 들어 `Goodies.esp`에 전용 SST가 있으면 다음 순서로 처리합니다.
 
-예시:
+```text
+Goodies 전용 SST
+      ↓ 우선
+Goodies.esp 현재 레코드
+      ↓
+전용 SST가 다루지 않은 vanilla/DLC override
+      ↓
+FalloutNV + DLC SST fallback
+```
+
+`Goodies - Jacobstown Water Fix.esp`처럼 전용 SST가 없는 플러그인은 본편/DLC fallback만 사용합니다.
+
+fallback은 단순 영문 문자열 치환이 아닙니다. 원 소유자, FormID, 레코드 타입, 필드 경로와 현재 영문 원문까지 모두 맞아야 적용됩니다. 모드가 해당 문구를 수정했다면 영어 상태로 보존합니다.
+
+## 사용 방법
+
+GitHub Releases의 **단일 실행 파일 `VNVKoreanPatcher.exe`**을 실행합니다. 별도 Node, Backend 폴더, TranslationData 폴더를 사용자가 관리할 필요가 없습니다. 실행 시 필요한 SST/XEditLib 리소스는 EXE 내부에서 임시로 풀어 사용합니다.
+
+`VNVKoreanPatcher.exe`를 실행하고 **`ModOrganizer.ini`가 있는 VNV MO2 인스턴스 폴더**를 선택합니다.
+
+예:
 
 ```text
 C:\Modlists\VNV
 ```
 
-선택한 폴더에는 반드시 `ModOrganizer.ini`가 있어야 합니다. 일반적인 Portable/Wabbajack 설치에서는 다음 항목이 보입니다.
+게임 폴더나 `mods` 폴더 자체를 선택하지 마세요. 패쳐가 INI에서 현재 프로필과 실제 Mods 경로를 읽습니다.
+
+Output 생성 버튼을 누르면 현재 프로필의 플러그인과 번역 대상 텍스트를 읽어 별도 Output을 만듭니다. 원본 MO2 파일은 직접 수정하지 않습니다.
+
+생성된 `Output\mods` 안의 각 모드 폴더를 MO2가 실제로 사용하는 `mods` 폴더에 합치면 됩니다.
+
+## 속도와 검증
+
+기존 방식:
 
 ```text
-ModOrganizer.exe
-ModOrganizer.ini
-mods/
-profiles/
-overwrite/
+CP1252 snapshot
+→ UTF-8 적용
+→ UTF-8 검증
+→ CP1252 최종 검증
 ```
 
-`mods` 폴더 자체를 선택하지 마세요. 패쳐는 `ModOrganizer.ini`를 읽어 현재 프로필과 실제 Mods 경로를 확인합니다. MO2에서 Mods/Profiles/Overwrite 경로를 다른 드라이브로 지정한 경우에도 `ModOrganizer.ini`가 있는 인스턴스 폴더를 선택하면 됩니다.
-
-게임 설치 폴더인 아래 경로를 선택하는 것이 아닙니다.
+v1.0.6:
 
 ```text
-C:\Games\Steam\steamapps\common\Fallout New Vegas
+UTF-8 SST 적용
+→ 저장본 fresh readback 검증
 ```
 
-즉 **게임 폴더나 `mods` 폴더 자체가 아니라, `ModOrganizer.ini`가 있는 VNV MO2 인스턴스 폴더를 선택**해야 합니다.
+CP1252 전체 재검증은 제거했지만 검증 자체를 없앤 것은 아닙니다. 저장 후 다시 열어 구조와 실제 번역 결과를 확인하고, UTF-8로 안전하게 읽히지 않는 문자열은 수정하지 않습니다. 다만 v1.0.6은 xdelta 빠른 경로도 제거하고 모든 대상 플러그인을 SST/XEditLib로 처리하므로, 전체 생성 시간은 플러그인 수와 ESM 크기에 따라 수 분 걸릴 수 있습니다.
 
-### 3. Output 생성
+## 방화벽/Defender 관련
 
-패쳐에서 **Output 생성**을 누릅니다.
-
-패쳐는 현재 VNV 프로필과 설치된 파일을 읽어서 별도의 `Output` 폴더를 만듭니다. 이 단계에서는 VNV 원본을 직접 수정하지 않습니다.
-
-현재 MO2 제공 파일이 릴리즈에서 검증한 소스 해시와 정확히 일치하면 xdelta3 빠른 경로를 사용합니다. `Fixed ESMs`처럼 릴리즈 기준과 바이트가 다른 파일이나 VNV 업데이트로 변경된 플러그인은 YesMan/xEditLib 레코드 병합 경로로 자동 전환해 현재 MO2 파일의 구조를 유지합니다.
-
-### 4. Output을 VNV에 복사
-
-생성이 끝나면 Output 안의 **`mods` 폴더 내용**을 VNV MO2 루트의 `mods` 폴더에 복사합니다.
-
-예를 들어:
-
-```text
-생성된 Output
-└─ mods
-   ├─ Fixed ESMs
-   ├─ YUP - Base Game and All DLC
-   ├─ Goodies
-   ├─ tNVSE Default Config
-   ├─ VNV Korean UI Strings
-   ├─ VNV Korean Radio Captions
-   └─ ...
-
-↓
-
-C:\Modlists\VNV\mods\
-```
-
-중요한 점은 **`Output\mods` 폴더 자체를 `mods` 안에 한 번 더 넣는 것이 아니라**, 그 안에 있는 각 모드 폴더를 기존 `C:\Modlists\VNV\mods\`에 합치는 것입니다.
-
-Windows에서 기존 파일을 바꿀지 물어보면 **덮어쓰기/교체**를 선택합니다. 번역 플러그인과 MCM/Translations, tNVSE 설정이 기존 VNV 모드 폴더에 들어가야 하기 때문입니다.
-
-패쳐가 만드는 Output은 현재 VNV의 모드 폴더 구조를 그대로 따라갑니다. 따라서 `FalloutNV.esm`, YUP, Goodies 등은 별도의 “한글패치 모드” 하나에 몰아넣는 방식이 아니라 **각 원래 VNV 모드 폴더의 번역본으로 교체**됩니다.
-
-### 5. MO2에서 새 모드 활성화
-
-MO2를 실행하고 왼쪽 모드 목록에서 다음 두 모드가 생성됐는지 확인합니다.
-
-- **VNV Korean UI Strings**
-- **VNV Korean Radio Captions**
-
-둘 다 체크해서 활성화합니다.
-
-`VNV Korean Radio Captions`는 NVSE DLL/UI 파일 모드라 별도 ESP가 없습니다.
-
-### 6. VNVKR UI Strings.esp 활성화
-
-MO2 오른쪽 **Plugins** 탭에서 다음 플러그인을 체크합니다.
-
-```text
-VNVKR UI Strings.esp
-```
-
-이 ESP에는 다음 종류의 한국어 문자열이 포함됩니다.
-
-- UI GMST
-- 로딩 스크린 메시지
-- 라디오 방송용 INFO 문자열
-- 라디오 자막에서 사용하는 표시 문자열
-
-YUP, Goodies, ExtraGoodies 등 필요한 마스터 뒤에 로드되어야 합니다. MO2가 마스터 의존성을 지키는 한 임의로 앞쪽으로 올리지 않는 것을 권장합니다.
-
-### 7. tNVSE 한국어 설정 확인
-
-Output은 기존 **tNVSE Default Config** 모드에 한국어용 설정을 반영합니다.
-
-주요 값은 다음과 같습니다.
-
-```ini
-bEnableFreeTypeNativeAtlas = 0
-bEnableFreeTypeFontCommandBuffer = 0
-uiFreeTypeFontDistanceFieldMode = 1
-uiReorderDoorPrompt = 2
-sOptionalStructuralParticle = ""
-bMultibyteInput = 1
-bEnableDictionaryTranslation = 0
-```
-
-또한 한국어 표시를 위해 다음 설정을 사용합니다.
-
-```ini
-uiEncoding = 4
-bUTF8 = 1
-```
-
-런타임 Dictionary 번역은 중복 번역을 막기 위해 비활성화합니다.
-
-폰트 구성에는 다음 계열이 포함됩니다.
-
-- Pretendard Bold
-- NanumSquare ExtraBold
-- TmonMonsori
-- NeoDunggeunmo Pro
-- font slot 1~8
-- Stewie 계열용 font slot 42
-
-기존 `tNVSE Default Config` 모드가 활성화되어 있었다면 그대로 활성화 상태를 유지하면 됩니다.
-
-### 8. 게임 실행 후 확인
-
-게임은 평소처럼 **MO2에서 실행**합니다.
-
-처음 테스트할 때는 다음 항목을 확인하는 것이 좋습니다.
-
-- 메인 UI와 Pip-Boy가 한글로 표시되는지
-- 일반 대사와 자막이 한글인지
-- 자막 앞 NPC/생물 이름이 한글인지
-- 문 상호작용 문구가 한글인지
-- 퀘스트 진행/완료 메시지가 한글인지
-- 로딩 스크린 메시지가 한글인지
-- 라디오 진행자 대사가 한글인지
-- 라디오 자막이 깨지지 않고 정상 한글로 표시되는지
-- MCM 메뉴와 각 모드의 Translations 파일이 한글로 적용되는지
-
-라디오 자막 DLL을 교체한 뒤에는 **게임을 완전히 종료하고 다시 실행**해야 합니다. 실행 중 DLL만 바꿔서는 새 버전이 로드되지 않습니다.
-
-## Output에 포함되는 항목
-
-현재 릴리즈 Output에는 다음이 포함됩니다.
-
-- VNV 관련 ESP/ESM 번역 40개
-- MCM/INI/JSON 번역
-- `MCM/Translations` 번역
-- 한국어 `tnvse.ini`
-- `tnvse_fonts.xml`
-- 한국어용 폰트
-- 번역 텍스처
-- `VNVKR UI Strings.esp`
-- `MojaveRadioCaptions.dll`
-- `MojaveRadioCaptions.ini`
-- Radio Captions HUD XML
-- UIO 등록 파일
-
-tNVSE 본체 DLL은 포함하지 않습니다.
+v1.0.5까지는 Node 런타임과 Koffi를 통해 XEditLib을 호출했습니다. v1.0.6은 Node와 Koffi를 포함하지 않습니다. EXE 내부의 Python XEdit 워커가 `XEditLib.dll`을 직접 호출하며 네트워크 연결은 필요하지 않습니다. PyInstaller 단일 EXE 자체는 코드 서명이 없으므로 Windows SmartScreen 경고가 뜰 수 있지만, Node 프로세스 때문에 발생하던 방화벽 경로는 제거했습니다.
 
 ## 패치 결과 보고서
 
-Output 생성 후 패쳐의 **패치 결과 보기** 버튼을 누르면 상세 텍스트 보고서를 열 수 있습니다.
+생성 후 `Output.report.json`과 `Output.report.txt`가 만들어집니다. 플러그인별 SST direct/fallback 번역 수와 함께 MCM JSON·Translation INI의 적용/미일치 수, MO2 provider, 저장본 검증 결과를 확인할 수 있습니다.
 
-보고서는 플러그인을 다음처럼 분류합니다.
+## 업데이트 대응
 
-- **정상 패치**: 검증된 원본과 일치해 xdelta 또는 기존 번역 경로가 정상 적용됨
-- **이미 한글 적용됨**: 현재 플러그인이 검증된 한국어 결과 해시와 일치해 느린 재병합 없이 그대로 재사용함
-- **업데이트 감지 - 번역 전체 적용**: 원본 해시는 달라졌지만 현재 레코드에 기존 번역이 모두 대응됨
-- **업데이트 감지 - 일부 문구 미적용**: 대응되는 기존 문구는 번역했고, 새 문구/변경 문구는 영어로 보존함
-- **업데이트 감지 - 한글 적용 없음**: 기존 번역 기준과 대응되는 문구가 없어 해당 플러그인에 번역을 적용하지 못함
-- **이번 설치에서 제거됨**: 카탈로그에는 있으나 현재 VNV에 파일이 없어 Output을 생성하지 않음
-- **신규 플러그인 - Fixed ESM 동일 레코드 번역 상속**: 새 플러그인의 바닐라/DLC 오버라이드 중 안전하게 일치한 필드만 자동 번역
-- **신규 플러그인 - 상속 가능한 동일 레코드 없음**: 새 플러그인은 발견했지만 안전하게 상속할 Fixed ESM 번역이 없음
+VNV나 개별 모드가 업데이트되어도 패쳐는 현재 MO2 파일을 다시 읽습니다. SST의 레코드/필드/영문 원문이 그대로라면 번역을 적용하고, 원문이 달라졌다면 해당 문자열만 건너뜁니다. 구버전 ESP/ESM 자체를 통째로 덮어쓰지 않습니다.
 
-신규 플러그인 자동 상속은 플러그인 자체의 새 대사나 새 설명을 추측 번역하지 않습니다. 기존 공식 ESM의 검증된 번역을 정확히 재사용할 수 있는 레코드만 처리합니다.
+## 개발
 
-## 업데이트하거나 VNV를 다시 설치한 경우
-
-VNV가 업데이트되거나 일부 모드를 다시 설치하면 한국어로 교체했던 파일이 원본으로 돌아갈 수 있습니다.
-
-그 경우:
-
-1. 최신 패쳐 릴리즈를 받습니다.
-2. 현재 VNV MO2 폴더를 다시 지정합니다.
-3. Output을 새로 생성합니다.
-4. 새 Output의 `mods` 내용을 다시 VNV의 `mods`에 합칩니다.
-5. `VNV Korean UI Strings`, `VNV Korean Radio Captions`, `VNVKR UI Strings.esp`가 활성화되어 있는지 확인합니다.
-
-기존 Output을 계속 재사용하기보다 **현재 VNV 상태를 기준으로 다시 생성**하는 것을 권장합니다.
-
-## 문제 해결
-
-### `Fixed ESMs` 관련 오류가 나는 경우
-
-v1.0.5부터 패쳐는 게임 `Data`의 `FalloutNV.esm`/DLC ESM을 번역 원본으로 사용하지 않습니다. VNV가 정상 설치되어 있다면 MO2에서 `Fixed ESMs` 모드가 활성화되어 있어야 하며, 공식 ESM들은 그 모드에서 읽습니다. `Fixed ESMs`가 비활성화됐거나 파일이 빠졌다면 먼저 VNV 설치 상태를 복구한 뒤 다시 실행하세요.
-
-
-### 대부분 한글인데 일부 플러그인 내용만 영어로 나오는 경우
-
-Output의 번역 플러그인이 실제 VNV `mods` 폴더에 덮어써졌는지 확인하세요. 특히 다음과 같은 파일은 기존 VNV 모드 폴더 안의 번역본으로 교체되어야 합니다.
+SST 원본 폴더 예:
 
 ```text
-Fixed ESMs\FalloutNV.esm
-YUP - Base Game and All DLC\YUP - Base Game + All DLC.esm
-Goodies\Goodies.esp
-Goodies\ExtraGoodies.esp
+F:\번역\프로그램\xTranslator\UserDictionaries\FalloutNV
 ```
 
-### UI는 한글인데 로딩 화면 또는 라디오가 영어인 경우
+SST 카탈로그 생성:
 
-다음을 확인하세요.
+```powershell
+py -3 tools\build_sst_catalog.py --base-catalog bundles\records-release-20261005 --sst-dir "F:\번역\프로그램\xTranslator\UserDictionaries\FalloutNV" --output bundles\sst-release-20261006
+```
 
-- `VNV Korean UI Strings` 모드 활성화
-- `VNVKR UI Strings.esp` 활성화
-- `VNV Korean Radio Captions` 모드 활성화
-
-### 라디오 자막의 한글이 깨지는 경우
-
-최신 릴리즈의 `MojaveRadioCaptions.dll`을 사용하고 있는지 확인하세요. 현재 버전은 게임 문자열이 이미 유효한 UTF-8이면 그대로 사용하고, 레거시 문자열일 때만 CP1252 변환을 사용합니다.
-
-DLL 교체 뒤에는 반드시 게임을 완전히 종료한 뒤 다시 실행하세요.
-
-### 폰트가 깨지거나 한글 입력/표시가 이상한 경우
-
-`tNVSE Default Config\NVSE\plugins\tnvse.ini`가 Output의 버전으로 교체되었는지 확인하고, tNVSE가 71 이상인지 확인하세요.
-
-## 플러그인 처리 방식
-
-패쳐의 플러그인 원본은 현재 MO2 프로필에서 활성화된 제공 파일을 기준으로 합니다. 게임 설치 폴더의 `Data`는 번역 소스로 스캔하지 않습니다. 특히 `FalloutNV.esm`과 공식 DLC/팩 ESM은 `Fixed ESMs`의 파일을 사용해야 하며, 이를 통해 VNV가 적용한 ESM 정리/수정 사항을 번역본에서도 그대로 유지합니다.
-
-현재 MO2 제공 파일의 SHA-256이 릴리즈 시 검증한 소스와 같으면 xdelta3 빠른 경로를 사용합니다. 해시가 다르면 레코드 병합 경로로 전환하며, 특히 공식 ESM은 `Fixed ESMs`의 현재 파일을 기준으로 처리합니다. xdelta로 복원된 ESP/ESM은 크기와 SHA-256을 다시 검사하므로 검증된 결과와 다른 바이트가 만들어지면 실패합니다.
-
-VNV 업데이트 등으로 원본 해시가 달라진 플러그인은 YesMan-AI/xEditLib 레코드 병합 경로로 전환합니다. FormID/소유자/필드/현재 원문이 대응되는 번역만 적용하고 새 문구나 변경된 문구는 영어로 유지합니다. 개발용 정밀 검증에서는 전체 레코드와 헤더를 새 세션에서 다시 읽으며, xEdit 저장 시 TES4 ONAM의 순서만 재정렬되는 경우에는 구성원 집합이 동일한지 비교합니다.
-
-CP1252 처리는 최종 게임 인코딩을 CP1252로 만들기 위한 것이 아닙니다. 원본 플러그인의 legacy 문자열이 UTF-8 로드 과정에서 손상되지 않았는지 검증·복구하기 위한 백엔드 절차입니다. 최종 한글 출력은 tNVSE의 UTF-8 감지 + Korean(UHC/949) UI 훅을 전제로 합니다.
-
-## 개발 및 검증
+테스트 및 릴리즈 빌드:
 
 ```powershell
 py -3 -m unittest discover -s tests -q
-py -3 vnvkr_output.py output --mo2-root "C:\Modlists\VNV" --profile "Viva New Vegas Extended" --catalog bundles/records-release-20261005 --output Output
 .\tools\build_release.ps1
 ```
 
-현재 저장소에는 패쳐 본체, 릴리즈 빌드에 필요한 최소 도구, 회귀 테스트만 유지합니다. 일회성 번역 감사·프로브·카탈로그 제작 스크립트와 작업 중간 산출물은 Git 소스 저장소에서 제외했습니다.
+핵심 파일:
 
-핵심 빌드 도구는 `tools/build_release.ps1`, `tools/prepare_release_package.py`, `tools/setup_xdelta.ps1`, `tools/setup_yesman_utf8_node.py`, `tools/yesman_text.cjs`입니다. 외부 도구와 자료 출처는 `docs/sources.md`를 참고하세요.
+- `vnvkr_sst.py` — xTranslator SSU8/SSU9 SST 파서
+- `vnvkr_xelib.py` — XEditLib ctypes 래퍼
+- `vnvkr_xedit_worker.py` — 플러그인 SST 적용/검증
+- `vnvkr_xedit.py` — MO2 작업 세션 백엔드
+- `tools/build_sst_catalog.py` — direct SST + 본편/DLC fallback 카탈로그 생성
+- `tools/build_release.ps1` — Windows 패키지 빌드
+
+외부 도구 및 기준 출처는 `docs/sources.md`를 참고하세요.

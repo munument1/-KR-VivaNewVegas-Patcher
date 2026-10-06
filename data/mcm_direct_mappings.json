@@ -1,0 +1,251 @@
+{
+  "schema_version": 1,
+  "files": [
+    {
+      "provider": "Agua Fria",
+      "path": "MCM/AguaFria.json",
+      "baseline_sha256": "3c02fd6c490ca9a0731afd39b7adf64da2858bbbcf96b0a6f38dc5b87cb04731",
+      "mappings": [
+        {
+          "context": "[\"pointer\",[\"submenus\",\"0\",\"listTitle\"]]",
+          "source": "Submenu 1",
+          "dest": "하위 메뉴 1"
+        },
+        {
+          "context": "[\"pointer\",[\"submenus\",\"0\",\"pageTitle\"]]",
+          "source": "Submenu 1: all types",
+          "dest": "하위 메뉴 1: 모든 유형"
+        },
+        {
+          "context": "[\"pointer\",[\"submenus\",\"0\",\"options\",\"1\",\"title\"]]",
+          "source": "Example Image Display",
+          "dest": "이미지 표시 예시"
+        }
+      ]
+    },
+    {
+      "provider": "Goodies",
+      "path": "MCM/ExtraGoodies.json",
+      "baseline_sha256": "3e5ea6699292a4aa2faa376f7f871015f0eafd3050cc69e55740dc3db627ca5a",
+      "mappings": [
+        {
+          "context": "[\"pointer\",[\"submenus\",\"0\",\"listTitle\"]]",
+          "source": "Submenu 1",
+          "dest": "하위 메뉴 1"
+        },
+        {
+          "context": "[\"pointer\",[\"submenus\",\"0\",\"pageTitle\"]]",
+          "source": "Submenu 1: all types",
+          "dest": "하위 메뉴 1: 모든 유형"
+        },
+        {
+          "context": "[\"pointer\",[\"submenus\",\"0\",\"options\",\"1\",\"title\"]]",
+          "source": "Example Image Display",
+          "dest": "이미지 표시 예시"
+        },
+        {
+          "context": "[\"binding\",[{\"configINI\":\"Features:iHonestHeartsDelay\",\"form\":\"ExtraGoodiesQUEST\",\"numVar\":\"iHHDelay\"}],[\"strings\",0]]",
+          "source": "Disabled",
+          "dest": "비활성화"
+        },
+        {
+          "context": "[\"binding\",[{\"configINI\":\"Features:iHonestHeartsDelay\",\"form\":\"ExtraGoodiesQUEST\",\"numVar\":\"iHHDelay\"}],[\"strings\",1]]",
+          "source": "Enabled",
+          "dest": "활성화"
+        },
+        {
+          "context": "[\"binding\",[{\"configINI\":\"Features:iHonestHeartsDelay\",\"form\":\"ExtraGoodiesQUEST\",\"numVar\":\"iHHDelay\"}],[\"strings\",2]]",
+          "source": "Alternate",
+          "dest": "대체"
+        },
+        {
+          "context": "[\"binding\",[{\"configINI\":\"Features:iPreOrderMessageMode\",\"form\":\"ExtraGoodiesQUEST\",\"numVar\":\"iPOPMessageMode\"}],[\"title\"]]",
+          "source": "Message Mode",
+          "dest": "메시지 모드"
+        }
+      ]
+    },
+    {
+      "provider": "Goodies",
+      "path": "MCM/Goodies.json",
+      "baseline_sha256": "c693bf7fc476aa5d8032fbc024220fd8d1b3ee750bf60eadb2ee5e454cd8995e",
+      "mappings": [
+        {
+          "context": "[\"pointer\",[\"displayName\"]]",
+          "source": "Goodies",
+          "dest": "Goodies"
+        },
+        {
+          "context": "[\"pointer\",[\"description\"]]",
+          "source": "Configuration options for Goodies",
+          "dest": "Goodies 설정 옵션"
+        },
+        {
+          "context": "[\"pointer\",[\"submenus\",\"0\",\"listTitle\"]]",
+          "source": "Submenu 1",
+          "dest": "하위 메뉴 1"
+        },
+        {
+          "context": "[\"pointer\",[\"submenus\",\"0\",\"pageTitle\"]]",
+          "source": "Submenu 1: all types",
+          "dest": "하위 메뉴 1: 모든 유형"
+        },
+        {
+          "context": "[\"pointer\",[\"submenus\",\"0\",\"options\",\"1\",\"title\"]]",
+          "source": "Example Image Display",
+          "dest": "이미지 표시 예시"
+        },
+        {
+          "context": "[\"pointer\",[\"submenus\",\"1\",\"listTitle\"]]",
+          "source": "Features",
+          "dest": "기능"
+        },
+        {
+          "context": "[\"pointer\",[\"submenus\",\"1\",\"pageTitle\"]]",
+          "source": "Goodies",
+          "dest": "Goodies"
+        },
+        {
+          "context": "[\"pointer\",[\"submenus\",\"1\",\"options\",\"1\",\"title\"]]",
+          "source": "Features:",
+          "dest": "기능:"
+        },
+        {
+          "context": "[\"binding\",[{\"configINI\":\"Features:bOnFireLines\",\"form\":\"GoodiesQUEST\",\"numVar\":\"iOnFire\"}],[\"title\"]]",
+          "source": "Companion OnFire Lines",
+          "dest": "동료 화상 대사"
+        },
+        {
+          "context": "[\"binding\",[{\"configINI\":\"Features:bOnFireLines\",\"form\":\"GoodiesQUEST\",\"numVar\":\"iOnFire\"}],[\"mouse\"]]",
+          "source": "Enable/disable the restored dialogue lines for when companions are lit on fire.",
+          "dest": "동료가 불에 탈 때 나오는 복원 대사를 활성화/비활성화합니다."
+        },
+        {
+          "context": "[\"binding\",[{\"configINI\":\"Features:bOnFireAnim\",\"form\":\"GoodiesQUEST\",\"numVar\":\"iFireAnims\"}],[\"title\"]]",
+          "source": "Companion OnFire Animations",
+          "dest": "동료 화상 애니메이션"
+        },
+        {
+          "context": "[\"binding\",[{\"configINI\":\"Features:bOnFireAnim\",\"form\":\"GoodiesQUEST\",\"numVar\":\"iFireAnims\"}],[\"mouse\"]]",
+          "source": "Enable/disable the added animations for when companions are lit on fire.",
+          "dest": "동료가 불에 탈 때 추가된 애니메이션을 활성화/비활성화합니다."
+        },
+        {
+          "context": "[\"binding\",[{\"configINI\":\"Features:bRangedReavers\",\"form\":\"GoodiesQUEST\",\"numVar\":\"iReavers\"}],[\"title\"]]",
+          "source": "Ranged Feral Ghoul Reavers",
+          "dest": "원거리 공격 야생 구울 리버"
+        },
+        {
+          "context": "[\"binding\",[{\"configINI\":\"Features:bRangedReavers\",\"form\":\"GoodiesQUEST\",\"numVar\":\"iReavers\"}],[\"mouse\"]]",
+          "source": "Enable/disable the restoration of Feral Ghoul Reavers' ranged attacks from Fallout 3",
+          "dest": "폴아웃 3의 야생 구울 리버 원거리 공격 복원을 활성화/비활성화합니다."
+        },
+        {
+          "context": "[\"binding\",[{\"configINI\":\"Features:bPewPewBurstFire\",\"form\":\"GoodiesQUEST\",\"numVar\":\"iPewPew\"}],[\"title\"]]",
+          "source": "Pew Pew Burst Fire",
+          "dest": "뿅 뿅 점사"
+        },
+        {
+          "context": "[\"binding\",[{\"configINI\":\"Features:bPewPewBurstFire\",\"form\":\"GoodiesQUEST\",\"numVar\":\"iPewPew\"}],[\"mouse\"]]",
+          "source": "Enable/disable the restoration of Pew Pew's burst fire feature NOTE: Hitman's animations from NVAO restore this feature on an animation-level. If you are using that mod, this setting will do nothing.",
+          "dest": "뿅 뿅의 점사 기능 복원을 활성화/비활성화합니다. 참고: NVAO의 Hitman 애니메이션은 애니메이션 수준에서 이 기능을 복원하므로, 해당 모드를 사용 중이라면 이 설정은 효과가 없습니다."
+        },
+        {
+          "context": "[\"binding\",[{\"configINI\":\"Features:bSentryBotToy\",\"form\":\"GoodiesQUEST\",\"numVar\":\"iSentryToy\"}],[\"title\"]]",
+          "source": "Sentry Bot Toy Companion",
+          "dest": "센트리봇 장난감 동료"
+        },
+        {
+          "context": "[\"binding\",[{\"configINI\":\"Features:bSentryBotToy\",\"form\":\"GoodiesQUEST\",\"numVar\":\"iSentryToy\"}],[\"mouse\"]]",
+          "source": "Enable/disable the restoration of the the Wild Wasteland-exclusive Sentry Bot toy companion.",
+          "dest": "이상한 황무지 전용 센트리봇 장난감 동료 복원을 활성화/비활성화합니다."
+        },
+        {
+          "context": "[\"binding\",[{\"configINI\":\"Features:bSulfurCavePerformanceMode\",\"form\":\"GoodiesQUEST\",\"numVar\":\"iSulfurPerf\"}],[\"title\"]]",
+          "source": "Sulfur Cave Performance Mode",
+          "dest": "유황 동굴 성능 모드"
+        },
+        {
+          "context": "[\"binding\",[{\"configINI\":\"Features:bSulfurCavePerformanceMode\",\"form\":\"GoodiesQUEST\",\"numVar\":\"iSulfurPerf\"}],[\"mouse\"]]",
+          "source": "If enabled, restored lights in Vault 19's Sulfur Cave will be disabled to improve performance.",
+          "dest": "활성화하면 성능 향상을 위해 볼트 19 유황 동굴의 복원된 조명을 비활성화합니다."
+        },
+        {
+          "context": "[\"binding\",[{\"configINI\":\"Features:bThornPerformanceMode\",\"form\":\"GoodiesQUEST\",\"numVar\":\"iThornPerf\"}],[\"title\"]]",
+          "source": "The Thorn Performance Mode",
+          "dest": "쏜 성능 모드"
+        },
+        {
+          "context": "[\"binding\",[{\"configINI\":\"Features:bThornPerformanceMode\",\"form\":\"GoodiesQUEST\",\"numVar\":\"iThornPerf\"}],[\"mouse\"]]",
+          "source": "If enabled, restored lights in The Thorn will be disabled to improve performance.",
+          "dest": "활성화하면 성능 향상을 위해 쏜의 복원된 조명을 비활성화합니다."
+        },
+        {
+          "context": "[\"pointer\",[\"submenus\",\"1\",\"options\",\"2\",\"title\"]]",
+          "source": "Weapon Mods:",
+          "dest": "무기 개조:"
+        },
+        {
+          "context": "[\"binding\",[{\"configINI\":\"Features:bTrailCarbineMods\",\"form\":\"GoodiesQUEST\",\"numVar\":\"iTrailCarbineMods\"}],[\"title\"]]",
+          "source": "Trail Carbine Mods",
+          "dest": "트레일 카빈 개조"
+        },
+        {
+          "context": "[\"binding\",[{\"configINI\":\"Features:bTrailCarbineMods\",\"form\":\"GoodiesQUEST\",\"numVar\":\"iTrailCarbineMods\"}],[\"mouse\"]]",
+          "source": "Enables/disables the restored weapon mods for the Trail Carbine. If enabled mid-session, leveled lists will not be updated until the game is reloaded.",
+          "dest": "트레일 카빈의 복원된 무기 개조를 활성화/비활성화합니다. 게임 도중 활성화하면 게임을 다시 불러오기 전까지 레벨드 리스트가 갱신되지 않습니다."
+        },
+        {
+          "context": "[\"binding\",[{\"configINI\":\"Features:bMarksmanCarbineMod\",\"form\":\"GoodiesQUEST\",\"numVar\":\"iMarksmanCarbineMod\"}],[\"title\"]]",
+          "source": "Marksman Carbine Mod",
+          "dest": "저격용 카빈 개조"
+        },
+        {
+          "context": "[\"binding\",[{\"configINI\":\"Features:bMarksmanCarbineMod\",\"form\":\"GoodiesQUEST\",\"numVar\":\"iMarksmanCarbineMod\"}],[\"mouse\"]]",
+          "source": "Enables/disables the restored weapon mod for the Marksman Carbine. If enabled mid-session, leveled lists will not be updated until the game is reloaded.",
+          "dest": "저격용 카빈의 복원된 무기 개조를 활성화/비활성화합니다. 게임 도중 활성화하면 게임을 다시 불러오기 전까지 레벨드 리스트가 갱신되지 않습니다."
+        },
+        {
+          "context": "[\"binding\",[{\"configINI\":\"Features:bServiceRifleMod\",\"form\":\"GoodiesQUEST\",\"numVar\":\"iServiceRifleMod\"}],[\"title\"]]",
+          "source": "Service Rifle Mod",
+          "dest": "제식 소총 개조"
+        },
+        {
+          "context": "[\"binding\",[{\"configINI\":\"Features:bServiceRifleMod\",\"form\":\"GoodiesQUEST\",\"numVar\":\"iServiceRifleMod\"}],[\"mouse\"]]",
+          "source": "Enables/disables the restored weapon mod for the Service Rifle. If enabled mid-session, leveled lists will not be updated until the game is reloaded.",
+          "dest": "제식 소총의 복원된 무기 개조를 활성화/비활성화합니다. 게임 도중 활성화하면 게임을 다시 불러오기 전까지 레벨드 리스트가 갱신되지 않습니다."
+        },
+        {
+          "context": "[\"binding\",[{\"configINI\":\"Features:b45AutoPistolMod\",\"form\":\"GoodiesQUEST\",\"numVar\":\"i45AutoMod\"}],[\"title\"]]",
+          "source": ".45 Auto Pistol Mod",
+          "dest": ".45 권총 개조"
+        },
+        {
+          "context": "[\"binding\",[{\"configINI\":\"Features:b45AutoPistolMod\",\"form\":\"GoodiesQUEST\",\"numVar\":\"i45AutoMod\"}],[\"mouse\"]]",
+          "source": "Enables/disables the restored weapon mod for the .45 Auto Pistol. If enabled mid-session, leveled lists will not be updated until the game is reloaded.",
+          "dest": ".45 권총의 복원된 무기 개조를 활성화/비활성화합니다. 게임 도중 활성화하면 게임을 다시 불러오기 전까지 레벨드 리스트가 갱신되지 않습니다."
+        },
+        {
+          "context": "[\"binding\",[{\"configINI\":\"Features:bHuntingRevolverMod\",\"form\":\"GoodiesQUEST\",\"numVar\":\"iHuntingRevolverMod\"}],[\"title\"]]",
+          "source": "Hunting Revolver Mod",
+          "dest": "사냥용 리볼버 개조"
+        },
+        {
+          "context": "[\"binding\",[{\"configINI\":\"Features:bHuntingRevolverMod\",\"form\":\"GoodiesQUEST\",\"numVar\":\"iHuntingRevolverMod\"}],[\"mouse\"]]",
+          "source": "Enables/disables the restored weapon mod for the Hunting Revolver. If enabled mid-session, leveled lists will not be updated until the game is reloaded.",
+          "dest": "사냥용 리볼버의 복원된 무기 개조를 활성화/비활성화합니다. 게임 도중 활성화하면 게임을 다시 불러오기 전까지 레벨드 리스트가 갱신되지 않습니다."
+        },
+        {
+          "context": "[\"binding\",[{\"configINI\":\"Features:bRipperMod\",\"form\":\"GoodiesQUEST\",\"numVar\":\"iRipperMod\"}],[\"title\"]]",
+          "source": "Ripper Mod",
+          "dest": "리퍼 개조"
+        },
+        {
+          "context": "[\"binding\",[{\"configINI\":\"Features:bRipperMod\",\"form\":\"GoodiesQUEST\",\"numVar\":\"iRipperMod\"}],[\"mouse\"]]",
+          "source": "Enables/disables the restored weapon mod for the Ripper. If enabled mid-session, leveled lists will not be updated until the game is reloaded.",
+          "dest": "리퍼의 복원된 무기 개조를 활성화/비활성화합니다. 게임 도중 활성화하면 게임을 다시 불러오기 전까지 레벨드 리스트가 갱신되지 않습니다."
+        }
+      ]
+    }
+  ]
+}

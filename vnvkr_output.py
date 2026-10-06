@@ -14,17 +14,20 @@ import shutil
 import tempfile
 
 import vnvkr
-import vnvkr_yesman
+import vnvkr_xedit
 import vnvkr_fonts
 from tools.loose_translation import TOKEN, decode, json_values
 
 SCHEMA = 1
 
-BASE_TRANSLATION_MASTERS = {
+FIXED_ESM_MASTERS = {
     'falloutnv.esm', 'deadmoney.esm', 'honesthearts.esm', 'oldworldblues.esm',
-    'lonesomeroad.esm', 'gunrunnersarsenal.esm', 'classicpack.esm',
-    'mercenarypack.esm', 'tribalpack.esm', 'caravanpack.esm',
+    'lonesomeroad.esm', 'gunrunnersarsenal.esm',
 }
+STARTER_PACK_MASTERS = {
+    'classicpack.esm', 'mercenarypack.esm', 'tribalpack.esm', 'caravanpack.esm',
+}
+BASE_TRANSLATION_MASTERS = FIXED_ESM_MASTERS | STARTER_PACK_MASTERS
 PLUGIN_SUFFIXES = {'.esm', '.esp'}
 
 
@@ -274,7 +277,7 @@ def make_catalog(workspace, work_dir, output, plugin_maps=None, plugin_fields=No
             accepted = []
             for row in native['mappings'][plugin.name]:
                 try:
-                    vnvkr_yesman.validate_mapping(row)
+                    vnvkr_xedit.validate_mapping(row)
                 except ValueError as error:
                     rejected.append({'plugin': plugin.name, **row, 'reason': str(error)})
                 else:
@@ -304,7 +307,7 @@ def make_catalog(workspace, work_dir, output, plugin_maps=None, plugin_fields=No
             accepted = []
             for row in optional_rows:
                 try:
-                    vnvkr_yesman.validate_mapping(row)
+                    vnvkr_xedit.validate_mapping(row)
                 except ValueError as error:
                     rejected.append({'plugin': plugin.name, 'provider': reference['provider'], **row, 'reason': str(error)})
                 else:
@@ -332,7 +335,7 @@ def make_catalog(workspace, work_dir, output, plugin_maps=None, plugin_fields=No
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(source, target)
         metadata = {'schema_version': SCHEMA, 'files': files,
-            'updated_plugin_backend': 'YesManAI/xEditLib' if native else 'not_available',
+            'updated_plugin_backend': 'Python ctypes + XEditLib' if native else 'not_available',
             'game_validation': 'not_run'}
         if native:
             metadata['plugin_fields'] = vnvkr.read_json(plugin_fields)['fields']
@@ -390,8 +393,41 @@ def merge_loose(source, entry):
                                    'unmatched': len(missing), 'unmatched_entries': missing}
 
 
+def fixed_esm_mod(installation):
+    """Return the enabled MO2 mod folder that provides FalloutNV.esm."""
+    chain = installation.providers.get('falloutnv.esm', [])
+    if not chain:
+        raise ValueError('Enabled Fixed ESMs provider for FalloutNV.esm was not found')
+    provider_file = Path(chain[-1]['physical']).resolve()
+    if not provider_file.is_relative_to(installation.mods):
+        raise ValueError('FalloutNV.esm is not provided by the enabled Fixed ESMs mod in the configured MO2 Mods directory')
+    relative = provider_file.relative_to(installation.mods)
+    if len(relative.parts) < 2:
+        raise ValueError('Invalid Fixed ESMs provider path')
+    return relative.parts[0]
+
+
+def source_for_plugin(installation, plugin):
+    """Resolve the effective MO2/VFS source with VNV-specific official-master rules."""
+    key = plugin.casefold()
+    chain = installation.providers.get(key)
+    if chain:
+        source = installation.source(plugin)
+        provider = chain[-1]['provider']
+        if key in FIXED_ESM_MASTERS and source.resolve().is_relative_to(installation.data.resolve()):
+            raise ValueError(
+                f'{plugin} is coming from raw game Data. '
+                'A normal VNV install must provide this core/DLC master from Fixed ESMs.')
+        return source, provider
+    if key in STARTER_PACK_MASTERS:
+        source = (installation.data / plugin).resolve()
+        if source.is_file():
+            return source, 'game:Data'
+    raise ValueError(f'No enabled translation source: {plugin}')
+
+
 def destination(installation, source, virtual=None):
-    """Map a physical MO2 provider to the portable manual-copy Output tree."""
+    """Map a physical provider to the portable manual-copy Output tree."""
     resolved = source.resolve()
     if resolved.is_relative_to(installation.mods):
         relative = resolved.relative_to(installation.mods)
@@ -399,6 +435,11 @@ def destination(installation, source, virtual=None):
     if resolved.is_relative_to(installation.overwrite):
         relative = resolved.relative_to(installation.overwrite)
         return vnvkr.virtual_path((Path('overwrite') / relative).as_posix())
+    if virtual and virtual.casefold() in STARTER_PACK_MASTERS and resolved.is_relative_to(installation.data.resolve()):
+        # The four Courier's Stash pack ESMs are normally only in the real game
+        # Data directory. Never overwrite Data: publish translated copies into
+        # the enabled Fixed ESMs mod so MO2 wins them at runtime.
+        return vnvkr.virtual_path(f'mods/{fixed_esm_mod(installation)}/{virtual}')
     if resolved.is_relative_to(installation.root):
         return vnvkr.virtual_path(resolved.relative_to(installation.root).as_posix())
     raise ValueError(f'Source is outside the configured MO2 storage; cannot mirror it in Output: {source}')
@@ -456,7 +497,13 @@ def build_output(installation, catalog_dir, output, progress=None):
     else:
         inherited_entries, discovery_skipped = [], []
     work_entries = [*catalog['files'], *inherited_entries]
-    inherit_targets = {entry['path'] for entry in inherited_entries}
+    # Every non-official plugin may inherit exact vanilla/DLC strings that it
+    # overrides. Direct SST mappings still take priority inside the worker.
+    fallback_targets = {
+        entry['path'] for entry in work_entries
+        if entry.get('kind') == 'plugin-records'
+        and entry['path'].casefold() not in BASE_TRANSLATION_MASTERS
+    }
 
     report = {'mo2_root': str(installation.root), 'profile': installation.profile,
               'output': str(output), 'created_utc': datetime.now(timezone.utc).isoformat(),
@@ -478,20 +525,31 @@ def build_output(installation, catalog_dir, output, progress=None):
         active_native = [entry for entry in work_entries if entry['kind'] == 'plugin-records'
                          and not entry.get('optional')
                          and entry['path'].casefold() in installation.active_keys
-                         and entry['path'].casefold() in installation.providers]
+                         and (entry['path'].casefold() in installation.providers
+                              or (entry['path'].casefold() in STARTER_PACK_MASTERS
+                                  and (installation.data / entry['path']).is_file()))]
         fast_native = {}
         for entry in active_native:
-            source = installation.source(entry['path'])
+            source, _provider = source_for_plugin(installation, entry['path'])
             fast = verified_delta(entry, catalog_dir, source)
             if fast:
                 fast_native[entry['path'].casefold()] = fast
         native_entries = [entry for entry in active_native if entry['path'].casefold() not in fast_native]
         native_files, native_stats = (None, {})
         if native_entries:
-            emit(f'업데이트된 플러그인 {len(native_entries)}개를 레코드 단위로 처리합니다.')
-            native_files, native_stats = vnvkr_yesman.merge_plugins(
+            emit(f'플러그인 {len(native_entries)}개에 SST 번역을 적용합니다.')
+            native_target_names = {entry['path'] for entry in native_entries}
+            starter_overrides = {
+                entry['path']: (installation.data / entry['path']).resolve()
+                for entry in native_entries
+                if entry['path'].casefold() in STARTER_PACK_MASTERS
+                and entry['path'].casefold() not in installation.providers
+            }
+            native_files, native_stats = vnvkr_xedit.merge_plugins(
                 installation, native_entries, catalog, Path(tmp) / 'NativeJob',
-                fallback_mappings=inheritance_memory, inherit_targets=inherit_targets,
+                source_overrides=starter_overrides,
+                fallback_mappings=inheritance_memory,
+                fallback_targets=fallback_targets & native_target_names,
                 progress=progress)
         delta_engine = None
         for entry in work_entries:
@@ -506,18 +564,25 @@ def build_output(installation, catalog_dir, output, progress=None):
                     report['skipped'].append({'path': entry['path'], 'provider': entry['provider'], 'reason': 'not_installed'})
                     continue
             else:
-                if not chain:
-                    if key in BASE_TRANSLATION_MASTERS:
-                        raise ValueError(
-                            f'{entry["path"]} has no enabled MO2 provider. '
-                            'VNV official ESMs must come from the enabled Fixed ESMs mod; '
-                            'the game Data folder is intentionally not used as a translation source.')
-                    report['skipped'].append({'path': entry['path'], 'reason': 'not_installed'})
-                    continue
                 if entry['kind'] in {'plugin-copy', 'plugin-records'} and key not in installation.active_keys:
                     report['skipped'].append({'path': entry['path'], 'reason': 'not_enabled'})
                     continue
-                source = installation.source(entry['path'])
+                if not chain:
+                    if key in STARTER_PACK_MASTERS and (installation.data / entry['path']).is_file():
+                        source = (installation.data / entry['path']).resolve()
+                        chain = [{'provider': 'game:Data'}]
+                    elif key in FIXED_ESM_MASTERS:
+                        raise ValueError(
+                            f'{entry["path"]} has no enabled MO2 provider. '
+                            'VNV core/DLC ESMs must come from the enabled Fixed ESMs mod.')
+                    else:
+                        report['skipped'].append({'path': entry['path'], 'reason': 'not_installed'})
+                        continue
+                else:
+                    if entry['kind'] in {'plugin-copy', 'plugin-records'}:
+                        source, _resolved_provider = source_for_plugin(installation, entry['path'])
+                    else:
+                        source = installation.source(entry['path'])
             original_hash = vnvkr.sha256(source)
             relative = destination(installation, source, entry['path'])
             if relative.casefold() in seen:
@@ -528,7 +593,7 @@ def build_output(installation, catalog_dir, output, progress=None):
                       'provider': chain[-1]['provider'], 'source_sha256': original_hash,
                       'source_updated': original_hash != entry['baseline_sha256']}
             if entry.get('auto_inherited'):
-                result.update(discovered_plugin=True, translation_source='fixed_esm_record_inheritance')
+                result.update(discovered_plugin=True, translation_source='base_dlc_sst_fallback')
             if entry['kind'] == 'plugin-records':
                 fast = (verified_delta(entry, catalog_dir, source) if entry.get('optional')
                         else fast_native.get(key))
@@ -556,9 +621,14 @@ def build_output(installation, catalog_dir, output, progress=None):
                         # A same-name inactive variant gets its own copied session.
                         # Never swap a live provider or alter profile activation.
                         emit(f'선택 플러그인 {entry["path"]}을(를) 레코드 단위로 처리합니다.')
-                        optional_files, optional_stats = vnvkr_yesman.merge_plugins(
+                        optional_files, optional_stats = vnvkr_xedit.merge_plugins(
                             installation, [entry], catalog, Path(tmp) / f'OptionalJob{len(seen)}',
-                            source_overrides={entry['path']: source}, progress=progress)
+                            source_overrides={entry['path']: source},
+                            fallback_mappings=inheritance_memory,
+                            fallback_targets=({entry['path']}
+                                              if entry['path'].casefold() not in BASE_TRANSLATION_MASTERS
+                                              else set()),
+                            progress=progress)
                         native_source, statistics = optional_files / entry['path'], optional_stats[entry['path']]
                     else:
                         native_source, statistics = native_files / entry['path'], native_stats[entry['path']]
@@ -572,9 +642,9 @@ def build_output(installation, catalog_dir, output, progress=None):
                         continue
                     target.parent.mkdir(parents=True, exist_ok=True)
                     shutil.copyfile(native_source, target)
-                    status = ('auto_inherited_base_records; native_readback_verified'
+                    status = ('auto_inherited_base_dlc_sst; native_readback_verified'
                               if entry.get('auto_inherited')
-                              else 'matched_text_only; native_readback_verified')
+                              else 'sst_matched_text_only; native_readback_verified')
                     result.update(statistics, status=status)
             elif entry['kind'] == 'plugin-copy':
                 payload = vnvkr.contained(catalog_dir, entry['payload'])

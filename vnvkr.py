@@ -17,7 +17,7 @@ import tempfile
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 
-VERSION = "1.0.5"
+VERSION = "1.0.6"
 ROOT = Path(__file__).resolve().parent
 RESERVED = {"meta.ini", ".vnv-kr-report.json"}
 HASH = re.compile(r"[0-9a-f]{64}\Z")
@@ -131,7 +131,8 @@ class Installation:
                 continue
             category = "plugin" if suffix in {".esm", ".esp"} and "/" not in relative else (
                 "loose_text_candidate" if suffix in {".xml", ".json", ".ini", ".txt", ".csv"}
-                and relative.casefold().startswith(("menus/", "nvse/", "config/", "mcm/")) else None)
+                and relative.casefold().startswith(
+                    ("menus/", "nvse/", "config/", "mcm/", "interface/")) else None)
             if category is None:
                 continue
             virtual_path(relative)
@@ -144,10 +145,12 @@ class Installation:
                                                       "physical": str(resolved), "category": category})
 
     def scan(self):
-        # Translation sources come only from the selected MO2 profile. The real
-        # game Data folder is validated in __init__, but is never registered as
-        # a provider: VNV's official masters must come from the enabled Fixed ESMs
-        # mod so cleaning/fixes are preserved in the translated output.
+        # Mirror MO2/VFS provider order: the real game Data directory is the
+        # lowest-priority provider, then enabled MO2 mods override it. This is
+        # required for stock VNV because the four preorder pack ESMs remain only
+        # in game Data, while FalloutNV.esm and the main DLC ESMs are overridden
+        # by the enabled Fixed ESMs mod.
+        self.add_tree(self.data, "game:Data")
         # MO2 persists modlist in descending priority: first enabled entry wins.
         for line in reversed(list_lines(self.profile_dir / "modlist.txt")):
             if line.startswith("+") and not line.endswith("_separator"):

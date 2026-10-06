@@ -14,13 +14,22 @@ from vnvkr_output import build_output
 
 
 def program_folder():
+    """Writable folder beside the user-facing executable."""
     return Path(sys.executable).resolve().parent if getattr(sys, 'frozen', False) else Path(__file__).resolve().parent
+
+
+def resource_folder():
+    """Read-only packaged resources; PyInstaller onefile extracts these to _MEIPASS."""
+    if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
+        return Path(sys._MEIPASS).resolve()
+    return Path(__file__).resolve().parent
 
 
 class App:
     def __init__(self, window):
         self.window = window
         self.folder = program_folder()
+        self.resources = resource_folder()
         self.events = queue.Queue()
         self.output = None
         self.report_file = None
@@ -59,9 +68,9 @@ class App:
                 'mods 폴더가 아니라 ModOrganizer.ini가 있는 VNV MO2 인스턴스 폴더를 선택해주세요.\n'
                 '패쳐는 해당 INI에서 현재 프로필과 mods 경로를 읽습니다.')
             return
-        catalog = self.folder / 'TranslationData'
+        catalog = self.resources / 'TranslationData'
         if not (catalog / 'catalog.json').is_file():
-            catalog = self.folder / 'bundles/records-release-20261003'
+            catalog = self.resources / 'bundles/sst-release-20261006'
             if not (catalog / 'catalog.json').is_file():
                 messagebox.showerror('번역 데이터 확인', '검증된 TranslationData 폴더가 필요합니다. 패쳐와 함께 제공된 파일을 확인해주세요.')
                 return
@@ -144,43 +153,52 @@ class App:
             os.startfile(self.report_file)
 
 
-def packaged_self_test(mo2_root):
-    folder = program_folder()
-    catalog = folder / 'TranslationData'
+def packaged_resources_check():
+    import subprocess
+    resources = resource_folder()
+    catalog = resources / 'TranslationData'
     if not (catalog / 'catalog.json').is_file():
         raise FileNotFoundError('TranslationData/catalog.json')
     metadata = vnvkr.read_json(catalog / 'catalog.json')
-    native = [entry for entry in metadata['files'] if entry.get('kind') == 'plugin-records']
-    verified = [entry for entry in native if entry.get('verified_delta')]
-    fallback_only = [entry for entry in native if not entry.get('verified_delta')]
-    unsafe_fallback = [entry['path'] for entry in fallback_only if not entry.get('mappings')]
-    if unsafe_fallback:
-        raise RuntimeError(f'Packaged release is missing a safe fallback path: {unsafe_fallback}')
-    if not verified:
-        raise RuntimeError('Packaged release has no verified fast deltas')
-    packaged_count = metadata.get('verified_delta_files')
-    if packaged_count is not None and packaged_count != len(verified):
-        raise RuntimeError('verified_delta_files metadata does not match the packaged catalog')
-    for entry in verified:
-        spec = entry['verified_delta']
-        payload = vnvkr.contained(catalog, spec['payload'])
-        if not payload.is_file() or vnvkr.sha256(payload) != spec['payload_sha256']:
-            raise RuntimeError(f'Packaged verified delta is missing/corrupt: {entry["path"]}')
-    for required in ('Backend/xdelta3.exe', 'Backend/node.exe', 'Backend/node-1252.exe',
-                     'Backend/yesman_text.cjs', 'Backend/node_modules/xeditlib/XEditLib.dll'):
-        if not (folder / required).is_file():
-            raise FileNotFoundError(required)
+    native = [entry for entry in metadata.get('files', []) if entry.get('kind') == 'plugin-records']
+    invalid = [entry['path'] for entry in native
+               if not entry.get('mappings') and not entry.get('fallback_only')]
+    if invalid:
+        raise RuntimeError(f'Packaged plugin has no direct SST or fallback policy: {invalid}')
+    required = [
+        resources / 'VNVKRXEditWorker.exe',
+        resources / 'Backend/XEditLib.dll',
+        resources / 'Backend/FalloutNV.Hardcoded.dat',
+        resources / 'Backend/icudtl.dat',
+    ]
+    for path in required:
+        if not path.is_file():
+            raise FileNotFoundError(path)
+    probe = subprocess.run(
+        [str(resources / 'VNVKRXEditWorker.exe'), '--print-acp'],
+        capture_output=True, text=True, timeout=60,
+        creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
+    if probe.returncode or probe.stdout.strip() != '65001':
+        raise RuntimeError(f'Packaged XEdit worker is not UTF-8: {probe.stdout} {probe.stderr}')
+    print(f'package-check OK: plugins={len(native)} mappings='
+          f'{sum(len(entry.get("mappings", [])) for entry in native)}')
+    return catalog
+
+
+def packaged_self_test(mo2_root):
+    catalog = packaged_resources_check()
     with tempfile.TemporaryDirectory(prefix='vnvkr-packaged-selftest-') as tmp:
         output = Path(tmp) / 'Output'
         report = build_output(vnvkr.Installation(Path(mo2_root)), catalog, output)
-        fast = sum(row.get('status') in {'exact_source_verified_delta', 'already_patched_verified'}
-                   for row in report['files'])
-        if fast < 1 or not output.is_dir():
-            raise RuntimeError(f'Packaged verified fast path did not complete: {fast}')
+        if not output.is_dir() or not report.get('files'):
+            raise RuntimeError('Packaged SST output did not complete')
     return 0
 
 
 if __name__ == '__main__':
+    if len(sys.argv) >= 2 and sys.argv[1] == '--package-check':
+        packaged_resources_check()
+        raise SystemExit(0)
     if len(sys.argv) >= 3 and sys.argv[1] == '--self-test':
         raise SystemExit(packaged_self_test(sys.argv[2]))
     window = tk.Tk()

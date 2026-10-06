@@ -64,12 +64,18 @@ class PatcherTests(unittest.TestCase):
         self.assertEqual(row["provider"], "High")
         self.assertEqual(row["provider_chain"], ["Low", "High"])
 
-    def test_game_data_is_not_a_translation_provider(self):
+    def test_game_data_is_lowest_priority_provider(self):
         install = vnvkr.Installation(self.mo2)
-        self.assertNotIn('game:Data',
-                         [row['provider'] for chain in install.providers.values() for row in chain])
-        with self.assertRaisesRegex(ValueError, 'No enabled loose-file provider'):
-            install.source('FalloutNV.esm')
+        chain = install.providers['falloutnv.esm']
+        self.assertEqual(chain[0]['provider'], 'game:Data')
+        self.assertEqual(install.source('FalloutNV.esm'), self.data / 'FalloutNV.esm')
+
+        fixed = self.high / 'FalloutNV.esm'
+        fixed.write_bytes(b'synthetic fixed master')
+        install = vnvkr.Installation(self.mo2)
+        chain = install.providers['falloutnv.esm']
+        self.assertEqual([row['provider'] for row in chain], ['game:Data', 'High'])
+        self.assertEqual(install.source('FalloutNV.esm'), fixed)
 
     def test_overwrite_wins(self):
         (self.mo2 / "overwrite/menus").mkdir(parents=True)
