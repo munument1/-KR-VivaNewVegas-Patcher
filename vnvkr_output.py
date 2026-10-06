@@ -400,7 +400,7 @@ def fixed_esm_mod(installation):
         raise ValueError('Enabled Fixed ESMs provider for FalloutNV.esm was not found')
     provider_file = Path(chain[-1]['physical']).resolve()
     if not provider_file.is_relative_to(installation.mods):
-        raise ValueError('FalloutNV.esm is not provided by the configured MO2 Mods directory')
+        raise ValueError('FalloutNV.esm is not provided by the enabled Fixed ESMs mod in the configured MO2 Mods directory')
     relative = provider_file.relative_to(installation.mods)
     if len(relative.parts) < 2:
         raise ValueError('Invalid Fixed ESMs provider path')
