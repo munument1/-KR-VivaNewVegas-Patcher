@@ -391,7 +391,7 @@ def merge_loose(source, entry):
 
 
 def destination(installation, source, virtual=None):
-    """Map a physical provider to the portable manual-copy Output tree."""
+    """Map a physical MO2 provider to the portable manual-copy Output tree."""
     resolved = source.resolve()
     if resolved.is_relative_to(installation.mods):
         relative = resolved.relative_to(installation.mods)
@@ -401,21 +401,6 @@ def destination(installation, source, virtual=None):
         return vnvkr.virtual_path((Path('overwrite') / relative).as_posix())
     if resolved.is_relative_to(installation.root):
         return vnvkr.virtual_path(resolved.relative_to(installation.root).as_posix())
-
-    # Official starter packs can still come from Steam Data. Their translated
-    # copies belong beside the enabled FalloutNV.esm provider (normally Fixed
-    # ESMs), even when the configured mods directory is outside the INI folder.
-    if virtual and resolved.is_relative_to(installation.data.resolve()):
-        master = installation.providers.get('falloutnv.esm', [])
-        if master:
-            provider = Path(master[-1]['physical']).resolve().parent
-            if provider.parent == installation.mods:
-                target = provider / vnvkr.virtual_path(virtual)
-                relative = target.relative_to(installation.mods)
-                return vnvkr.virtual_path((Path('mods') / relative).as_posix())
-        raise ValueError(
-            f'Official master is coming from the game Data folder, but an enabled Fixed ESMs '
-            f'provider could not be resolved for Output: {source}')
     raise ValueError(f'Source is outside the configured MO2 storage; cannot mirror it in Output: {source}')
 
 
@@ -522,6 +507,11 @@ def build_output(installation, catalog_dir, output, progress=None):
                     continue
             else:
                 if not chain:
+                    if key in BASE_TRANSLATION_MASTERS:
+                        raise ValueError(
+                            f'{entry["path"]} has no enabled MO2 provider. '
+                            'VNV official ESMs must come from the enabled Fixed ESMs mod; '
+                            'the game Data folder is intentionally not used as a translation source.')
                     report['skipped'].append({'path': entry['path'], 'reason': 'not_installed'})
                     continue
                 if entry['kind'] in {'plugin-copy', 'plugin-records'} and key not in installation.active_keys:
