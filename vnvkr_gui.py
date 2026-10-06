@@ -54,7 +54,10 @@ class App:
     def start(self):
         root = Path(self.mo2.get().strip())
         if not (root / 'ModOrganizer.ini').is_file():
-            messagebox.showerror('폴더 확인', 'ModOrganizer.ini가 있는 VNV MO2 폴더를 선택해주세요.')
+            messagebox.showerror(
+                '폴더 확인',
+                'mods 폴더가 아니라 ModOrganizer.ini가 있는 VNV MO2 인스턴스 폴더를 선택해주세요.\n'
+                '패쳐는 해당 INI에서 현재 프로필과 mods 경로를 읽습니다.')
             return
         catalog = self.folder / 'TranslationData'
         if not (catalog / 'catalog.json').is_file():
