@@ -118,10 +118,14 @@ def main():
     readme=a.dist/'README.md'
     readme.write_text(
         '# Viva New Vegas 한국어 패쳐\n\n'
-        'VNVKoreanPatcher.exe를 실행하고 ModOrganizer.ini가 있는 VNV 폴더를 선택한 뒤 Output을 생성합니다.\n'
-        '생성된 Output\\mods 내용을 VNV MO2 폴더에 복사하세요. 원본 게임/VNV 파일은 패쳐가 직접 수정하지 않습니다.\n\n'
-        '- 정확히 검증된 VNV 원본: xdelta 빠른 경로 사용\n'
-        '- 업데이트된 플러그인: 레코드 단위 YesMan/xEditLib 병합 경로 사용\n'
+        'VNVKoreanPatcher.exe를 실행하고 ModOrganizer.ini가 있는 VNV MO2 인스턴스 폴더를 선택한 뒤 Output을 생성합니다.\n'
+        'mods 폴더 자체를 선택하지 마세요. 패쳐가 ModOrganizer.ini에서 현재 프로필과 실제 Mods 경로를 읽습니다.\n'
+        '생성된 Output\\mods 내용을 MO2가 실제로 사용하는 Mods 폴더에 복사하세요. 원본 게임/VNV 파일은 패쳐가 직접 수정하지 않습니다.\n\n'
+        '- ESP/ESM 원본은 현재 MO2 프로필의 제공 파일에서만 읽음\n'
+        '- FalloutNV.esm 및 공식 DLC/팩 ESM은 활성화된 Fixed ESMs 파일을 사용\n'
+        '- 게임 Data 폴더는 설치 확인에만 사용하며 번역 원본으로 사용하지 않음\n'
+        '- 검증된 소스 해시 일치: xdelta 빠른 경로 사용\n'
+        '- 업데이트/상이한 플러그인: 레코드 단위 YesMan/xEditLib 병합 경로 사용\n'
         '- tNVSE 71 이상 필요. tNVSE DLL은 배포물에 포함하지 않음\n'
         '- KR-RADIO 호환 ESP는 아직 별도 작업 중\n', encoding='utf-8-sig')
     files=[p for p in a.dist.rglob('*') if p.is_file()]
