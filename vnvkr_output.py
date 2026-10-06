@@ -408,11 +408,17 @@ def fixed_esm_mod(installation):
 
 
 def source_for_plugin(installation, plugin):
-    """Resolve a translation source without using raw game Data except starter packs."""
+    """Resolve the effective MO2/VFS source with VNV-specific official-master rules."""
     key = plugin.casefold()
     chain = installation.providers.get(key)
     if chain:
-        return installation.source(plugin), chain[-1]['provider']
+        source = installation.source(plugin)
+        provider = chain[-1]['provider']
+        if key in FIXED_ESM_MASTERS and source.resolve().is_relative_to(installation.data.resolve()):
+            raise ValueError(
+                f'{plugin} is coming from raw game Data. '
+                'A normal VNV install must provide this core/DLC master from Fixed ESMs.')
+        return source, provider
     if key in STARTER_PACK_MASTERS:
         source = (installation.data / plugin).resolve()
         if source.is_file():
@@ -573,7 +579,10 @@ def build_output(installation, catalog_dir, output, progress=None):
                         report['skipped'].append({'path': entry['path'], 'reason': 'not_installed'})
                         continue
                 else:
-                    source = installation.source(entry['path'])
+                    if entry['kind'] in {'plugin-copy', 'plugin-records'}:
+                        source, _resolved_provider = source_for_plugin(installation, entry['path'])
+                    else:
+                        source = installation.source(entry['path'])
             original_hash = vnvkr.sha256(source)
             relative = destination(installation, source, entry['path'])
             if relative.casefold() in seen:
