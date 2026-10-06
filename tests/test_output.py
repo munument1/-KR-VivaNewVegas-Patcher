@@ -78,7 +78,7 @@ class OutputTests(unittest.TestCase):
                   'baseline_sha256': '0' * 64, 'mappings': []}
         vnvkr.write_json(self.catalog / 'catalog.json',
                          {'schema_version': 1, 'files': [self.mapping, plugin], 'plugin_fields': {}})
-        with mock.patch.object(output.vnvkr_yesman, 'merge_plugins',
+        with mock.patch.object(output.vnvkr_xedit, 'merge_plugins',
                                side_effect=AssertionError('missing plugin reached native backend')):
             report = self.build()
         skipped = next(row for row in report['skipped'] if row['path'] == 'Mod.esp')
@@ -118,8 +118,8 @@ class OutputTests(unittest.TestCase):
                           'plugin_fields': {'MESG': ['DESC']}})
 
         def fake_merge(installation, entries, catalog, job, source_overrides=None,
-                       fallback_mappings=None, inherit_targets=None, progress=None):
-            self.assertEqual(inherit_targets, {'New VNV Patch.esp'})
+                       fallback_mappings=None, fallback_targets=None, progress=None):
+            self.assertEqual(fallback_targets, {'New VNV Patch.esp'})
             self.assertEqual(fallback_mappings, [base_mapping])
             translated = job / 'Translated'
             translated.mkdir(parents=True)
@@ -127,19 +127,19 @@ class OutputTests(unittest.TestCase):
             for entry in entries:
                 if entry['path'] == 'FalloutNV.esm':
                     (translated / entry['path']).write_bytes(b'fixed master Korean')
-                    stats[entry['path']] = {'translated': 1, 'inherited_translated': 0,
-                                            'catalog_translated': 1, 'unmatched': 0,
+                    stats[entry['path']] = {'translated': 1, 'fallback_translated': 0,
+                                            'direct_sst_translated': 1, 'unmatched': 0,
                                             'unmatched_entries': [], 'records_verified': 1}
                 elif entry['path'] == 'New VNV Patch.esp':
                     (translated / entry['path']).write_bytes(b'new plugin inherited Korean')
-                    stats[entry['path']] = {'translated': 1, 'inherited_translated': 1,
-                                            'catalog_translated': 0, 'unmatched': 0,
+                    stats[entry['path']] = {'translated': 1, 'fallback_translated': 1,
+                                            'direct_sst_translated': 0, 'unmatched': 0,
                                             'unmatched_entries': [], 'records_verified': 1}
                 else:
                     self.fail(f'unexpected native entry: {entry["path"]}')
             return translated, stats
 
-        with mock.patch.object(output.vnvkr_yesman, 'merge_plugins', side_effect=fake_merge):
+        with mock.patch.object(output.vnvkr_xedit, 'merge_plugins', side_effect=fake_merge):
             report = self.build()
         self.assertEqual((self.out / 'mods/Renamed Mod/New VNV Patch.esp').read_bytes(),
                          b'new plugin inherited Korean')
@@ -281,7 +281,7 @@ class OutputTests(unittest.TestCase):
             target.write_bytes(target_raw)
         with mock.patch.object(output.vnvkr, 'engine', return_value=Path('xdelta3.exe')), \
              mock.patch.object(output.vnvkr, 'delta', side_effect=fake_delta), \
-             mock.patch.object(output.vnvkr_yesman, 'merge_plugins', side_effect=AssertionError('slow path used')):
+             mock.patch.object(output.vnvkr_xedit, 'merge_plugins', side_effect=AssertionError('slow path used')):
             report = self.build()
         self.assertEqual((self.out / 'mods/Renamed Mod/Mod.esp').read_bytes(), target_raw)
         self.assertEqual(report['files'][0]['status'], 'exact_source_verified_delta')
@@ -301,7 +301,7 @@ class OutputTests(unittest.TestCase):
                       'unmatched': 0, 'records_verified': 9, 'verification': 'fixture'}}
         vnvkr.write_json(self.catalog / 'catalog.json', {'schema_version': 1, 'files': [plugin]})
         with mock.patch.object(output.vnvkr, 'delta', side_effect=AssertionError('delta should not run')), \
-             mock.patch.object(output.vnvkr_yesman, 'merge_plugins',
+             mock.patch.object(output.vnvkr_xedit, 'merge_plugins',
                                side_effect=AssertionError('native backend should not run')):
             report = self.build()
         result = report['files'][0]
