@@ -183,7 +183,13 @@ def main():
         entry['sst_plugins'] = sst.plugins
         entry['sst_stats'] = stats
         entry['translation_source'] = 'xtranslator_sst'
-        entry.pop('fallback_only', None)
+        if rows:
+            entry.pop('fallback_only', None)
+        else:
+            # Some old SSTs contain only FormID=0/source-only entries. Keep the
+            # plugin eligible for the safe base/DLC fallback instead of guessing
+            # which record a source-only row belongs to.
+            entry['fallback_only'] = True
         plugin_stats.append({
             'plugin': entry['path'],
             'mode': 'direct_sst',
