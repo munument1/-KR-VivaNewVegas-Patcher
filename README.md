@@ -29,8 +29,8 @@ v1.0.6부터 플러그인 번역 데이터의 기준을 **xTranslator SST**로 �
 패쳐가 번역 대상으로 다루는 것은 다음 세 종류입니다.
 
 1. 현재 MO2 프로필의 **ESP/ESM 플러그인**
-2. **MCM JSON**
-3. **Translations 계열 텍스트** — `MCM/Translations`, `Interface/Translations`, 모드별 `*_Translations.ini` 등
+2. **MCM JSON** — 직접 표시 문자열은 JSON 안에서 병합하고, `$키` 방식은 대응 Translation INI를 사용
+3. **Translations 계열 텍스트** — New Vegas에서 실제 사용하는 `MCM/Translations/*.ini`와 모드별 `config/*_Translations.ini` 등
 
 한국어 출력에 필요한 폰트 설정은 지원 파일로 유지할 수 있지만, 기존 별도 라디오 DLL·번역 텍스처 같은 런타임 오버레이는 v1.0.6 SST 패쳐의 번역 범위에서 제외합니다.
 
@@ -119,7 +119,7 @@ v1.0.5까지는 Node 런타임과 Koffi를 통해 XEditLib을 호출했습니다
 
 ## 패치 결과 보고서
 
-생성 후 `Output.report.json`과 `Output.report.txt`가 만들어집니다. 플러그인별 SST direct 번역 수, 본편/DLC fallback 번역 수, 현재 원문과 맞지 않아 건너뛴 항목, MO2 provider, 저장본 검증 결과를 확인할 수 있습니다.
+생성 후 `Output.report.json`과 `Output.report.txt`가 만들어집니다. 플러그인별 SST direct/fallback 번역 수와 함께 MCM JSON·Translation INI의 적용/미일치 수, MO2 provider, 저장본 검증 결과를 확인할 수 있습니다.
 
 ## 업데이트 대응
 

@@ -141,6 +141,7 @@ def main():
     parser.add_argument('--base-catalog', type=Path, required=True)
     parser.add_argument('--sst-dir', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--mcm-direct', type=Path, default=ROOT / 'data/mcm_direct_mappings.json')
     args = parser.parse_args()
 
     base = args.base_catalog.resolve()
@@ -150,6 +151,42 @@ def main():
     shutil.copytree(base, out)
     catalog_path = out / 'catalog.json'
     catalog = vnvkr.read_json(catalog_path)
+
+    # Add reviewed direct-display MCM JSON mappings that are not backed by a
+    # separate $key translation INI. Token-only JSON files need no direct edit.
+    if args.mcm_direct and args.mcm_direct.is_file():
+        mcm_spec = vnvkr.read_json(args.mcm_direct)
+        if mcm_spec.get('schema_version') != 1:
+            raise ValueError('Unsupported MCM direct mapping schema')
+        by_loose_key = {
+            (entry.get('original_provider', '').casefold(), entry.get('path', '').casefold()): i
+            for i, entry in enumerate(catalog.get('files', []))
+            if entry.get('kind') in {'json', 'ini'}
+        }
+        for item in mcm_spec.get('files', []):
+            entry = {
+                'path': vnvkr.virtual_path(item['path']),
+                'kind': 'json',
+                'original_provider': item['provider'],
+                'baseline_sha256': item['baseline_sha256'],
+                'mappings': item['mappings'],
+                'translation_source': 'reviewed_mcm_direct_json',
+            }
+            for row in entry['mappings']:
+                if not all(isinstance(row.get(k), str) for k in ('context', 'source', 'dest')):
+                    raise ValueError(f'Invalid MCM direct mapping: {entry["path"]}')
+                from vnvkr_output import check_pair
+                check_pair(row['source'], row['dest'])
+            key = (entry['original_provider'].casefold(), entry['path'].casefold())
+            if key in by_loose_key:
+                catalog['files'][by_loose_key[key]] = entry
+            else:
+                by_loose_key[key] = len(catalog['files'])
+                catalog['files'].append(entry)
+        catalog['mcm_direct_json'] = {
+            'files': len(mcm_spec.get('files', [])),
+            'mappings': sum(len(x.get('mappings', [])) for x in mcm_spec.get('files', [])),
+        }
 
     by_target = {}
     for path in args.sst_dir.glob('*_en_ko.sst'):
