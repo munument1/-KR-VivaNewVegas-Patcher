@@ -14,7 +14,7 @@ import shutil
 import tempfile
 
 import vnvkr
-import vnvkr_yesman
+import vnvkr_xedit
 import vnvkr_fonts
 from tools.loose_translation import TOKEN, decode, json_values
 
@@ -274,7 +274,7 @@ def make_catalog(workspace, work_dir, output, plugin_maps=None, plugin_fields=No
             accepted = []
             for row in native['mappings'][plugin.name]:
                 try:
-                    vnvkr_yesman.validate_mapping(row)
+                    vnvkr_xedit.validate_mapping(row)
                 except ValueError as error:
                     rejected.append({'plugin': plugin.name, **row, 'reason': str(error)})
                 else:
@@ -304,7 +304,7 @@ def make_catalog(workspace, work_dir, output, plugin_maps=None, plugin_fields=No
             accepted = []
             for row in optional_rows:
                 try:
-                    vnvkr_yesman.validate_mapping(row)
+                    vnvkr_xedit.validate_mapping(row)
                 except ValueError as error:
                     rejected.append({'plugin': plugin.name, 'provider': reference['provider'], **row, 'reason': str(error)})
                 else:
@@ -332,7 +332,7 @@ def make_catalog(workspace, work_dir, output, plugin_maps=None, plugin_fields=No
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(source, target)
         metadata = {'schema_version': SCHEMA, 'files': files,
-            'updated_plugin_backend': 'YesManAI/xEditLib' if native else 'not_available',
+            'updated_plugin_backend': 'Python ctypes + XEditLib' if native else 'not_available',
             'game_validation': 'not_run'}
         if native:
             metadata['plugin_fields'] = vnvkr.read_json(plugin_fields)['fields']
@@ -456,7 +456,13 @@ def build_output(installation, catalog_dir, output, progress=None):
     else:
         inherited_entries, discovery_skipped = [], []
     work_entries = [*catalog['files'], *inherited_entries]
-    inherit_targets = {entry['path'] for entry in inherited_entries}
+    # Every non-official plugin may inherit exact vanilla/DLC strings that it
+    # overrides. Direct SST mappings still take priority inside the worker.
+    fallback_targets = {
+        entry['path'] for entry in work_entries
+        if entry.get('kind') == 'plugin-records'
+        and entry['path'].casefold() not in BASE_TRANSLATION_MASTERS
+    }
 
     report = {'mo2_root': str(installation.root), 'profile': installation.profile,
               'output': str(output), 'created_utc': datetime.now(timezone.utc).isoformat(),
@@ -488,10 +494,12 @@ def build_output(installation, catalog_dir, output, progress=None):
         native_entries = [entry for entry in active_native if entry['path'].casefold() not in fast_native]
         native_files, native_stats = (None, {})
         if native_entries:
-            emit(f'업데이트된 플러그인 {len(native_entries)}개를 레코드 단위로 처리합니다.')
-            native_files, native_stats = vnvkr_yesman.merge_plugins(
+            emit(f'플러그인 {len(native_entries)}개에 SST 번역을 적용합니다.')
+            native_target_names = {entry['path'] for entry in native_entries}
+            native_files, native_stats = vnvkr_xedit.merge_plugins(
                 installation, native_entries, catalog, Path(tmp) / 'NativeJob',
-                fallback_mappings=inheritance_memory, inherit_targets=inherit_targets,
+                fallback_mappings=inheritance_memory,
+                fallback_targets=fallback_targets & native_target_names,
                 progress=progress)
         delta_engine = None
         for entry in work_entries:
@@ -528,7 +536,7 @@ def build_output(installation, catalog_dir, output, progress=None):
                       'provider': chain[-1]['provider'], 'source_sha256': original_hash,
                       'source_updated': original_hash != entry['baseline_sha256']}
             if entry.get('auto_inherited'):
-                result.update(discovered_plugin=True, translation_source='fixed_esm_record_inheritance')
+                result.update(discovered_plugin=True, translation_source='base_dlc_sst_fallback')
             if entry['kind'] == 'plugin-records':
                 fast = (verified_delta(entry, catalog_dir, source) if entry.get('optional')
                         else fast_native.get(key))
@@ -556,9 +564,14 @@ def build_output(installation, catalog_dir, output, progress=None):
                         # A same-name inactive variant gets its own copied session.
                         # Never swap a live provider or alter profile activation.
                         emit(f'선택 플러그인 {entry["path"]}을(를) 레코드 단위로 처리합니다.')
-                        optional_files, optional_stats = vnvkr_yesman.merge_plugins(
+                        optional_files, optional_stats = vnvkr_xedit.merge_plugins(
                             installation, [entry], catalog, Path(tmp) / f'OptionalJob{len(seen)}',
-                            source_overrides={entry['path']: source}, progress=progress)
+                            source_overrides={entry['path']: source},
+                            fallback_mappings=inheritance_memory,
+                            fallback_targets=({entry['path']}
+                                              if entry['path'].casefold() not in BASE_TRANSLATION_MASTERS
+                                              else set()),
+                            progress=progress)
                         native_source, statistics = optional_files / entry['path'], optional_stats[entry['path']]
                     else:
                         native_source, statistics = native_files / entry['path'], native_stats[entry['path']]
@@ -572,9 +585,9 @@ def build_output(installation, catalog_dir, output, progress=None):
                         continue
                     target.parent.mkdir(parents=True, exist_ok=True)
                     shutil.copyfile(native_source, target)
-                    status = ('auto_inherited_base_records; native_readback_verified'
+                    status = ('auto_inherited_base_dlc_sst; native_readback_verified'
                               if entry.get('auto_inherited')
-                              else 'matched_text_only; native_readback_verified')
+                              else 'sst_matched_text_only; native_readback_verified')
                     result.update(statistics, status=status)
             elif entry['kind'] == 'plugin-copy':
                 payload = vnvkr.contained(catalog_dir, entry['payload'])
