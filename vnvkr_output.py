@@ -80,7 +80,12 @@ def discover_new_plugin_entries(installation, catalog):
                             'discovered_plugin': True, 'translation_applied': False})
             continue
         source = Path(chain[-1]['physical']).resolve()
-        if not source.is_relative_to(installation.root):
+        # MO2 may keep its configured mods/overwrite directories outside the
+        # directory that contains ModOrganizer.ini. Treat those configured
+        # storage roots as part of the instance instead of comparing only
+        # against installation.root.
+        managed = source.is_relative_to(installation.mods) or source.is_relative_to(installation.overwrite)
+        if not managed:
             skipped.append({'path': plugin, 'provider': chain[-1]['provider'],
                             'reason': 'new_plugin_outside_mo2',
                             'discovered_plugin': True, 'translation_applied': False})
@@ -386,21 +391,32 @@ def merge_loose(source, entry):
 
 
 def destination(installation, source, virtual=None):
-    # A single copy operation can represent only descendants of the selected root.
+    """Map a physical provider to the portable manual-copy Output tree."""
     resolved = source.resolve()
-    if not resolved.is_relative_to(installation.root):
-        # Official starter packs are in Steam Data, outside the MO2 instance.
-        # Put their translated copies beside the already enabled Fixed ESM master.
-        # This needs no game-directory write or profile activation change.
-        if virtual and resolved.is_relative_to(installation.data.resolve()):
-            master = installation.providers.get('falloutnv.esm', [])
-            if master:
-                provider = Path(master[-1]['physical']).resolve().parent
-                if provider.parent == installation.mods and provider.is_relative_to(installation.root):
-                    target = provider / vnvkr.virtual_path(virtual)
-                    return vnvkr.virtual_path(target.relative_to(installation.root).as_posix())
-        raise ValueError(f'Source is outside the MO2 root; cannot mirror it in one Output: {source}')
-    return vnvkr.virtual_path(resolved.relative_to(installation.root).as_posix())
+    if resolved.is_relative_to(installation.mods):
+        relative = resolved.relative_to(installation.mods)
+        return vnvkr.virtual_path((Path('mods') / relative).as_posix())
+    if resolved.is_relative_to(installation.overwrite):
+        relative = resolved.relative_to(installation.overwrite)
+        return vnvkr.virtual_path((Path('overwrite') / relative).as_posix())
+    if resolved.is_relative_to(installation.root):
+        return vnvkr.virtual_path(resolved.relative_to(installation.root).as_posix())
+
+    # Official starter packs can still come from Steam Data. Their translated
+    # copies belong beside the enabled FalloutNV.esm provider (normally Fixed
+    # ESMs), even when the configured mods directory is outside the INI folder.
+    if virtual and resolved.is_relative_to(installation.data.resolve()):
+        master = installation.providers.get('falloutnv.esm', [])
+        if master:
+            provider = Path(master[-1]['physical']).resolve().parent
+            if provider.parent == installation.mods:
+                target = provider / vnvkr.virtual_path(virtual)
+                relative = target.relative_to(installation.mods)
+                return vnvkr.virtual_path((Path('mods') / relative).as_posix())
+        raise ValueError(
+            f'Official master is coming from the game Data folder, but an enabled Fixed ESMs '
+            f'provider could not be resolved for Output: {source}')
+    raise ValueError(f'Source is outside the configured MO2 storage; cannot mirror it in Output: {source}')
 
 
 def verified_delta(entry, catalog_dir, source):
@@ -668,11 +684,10 @@ def build_assets(installation, catalog_dir, spec, stage, seen, fallback_provider
                       for name in reversed(installation.mods_enabled)]
         candidates.insert(0, vnvkr.contained(installation.overwrite, relative))
         source = next((p for p in candidates if p.is_file()), None)
-        if source and not source.is_relative_to(installation.root):
-            raise ValueError('Texture provider is outside the selected MO2 root')
-        if source and source.is_relative_to(installation.root):
-            output_path = source.relative_to(installation.root).as_posix()
-            provider = source.relative_to(installation.mods).parts[0] if source.is_relative_to(installation.mods) else 'MO2:overwrite'
+        if source:
+            output_path = destination(installation, source, relative)
+            provider = (source.relative_to(installation.mods).parts[0]
+                        if source.is_relative_to(installation.mods) else 'MO2:overwrite')
         else:
             provider, output_path = default, f'mods/{default}/{relative}'
             if default not in installation.mods_enabled:
