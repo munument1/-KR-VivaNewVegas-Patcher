@@ -144,10 +144,12 @@ class Installation:
                                                       "physical": str(resolved), "category": category})
 
     def scan(self):
-        # Translation sources come only from the selected MO2 profile. The real
-        # game Data folder is validated in __init__, but is never registered as
-        # a provider: VNV's official masters must come from the enabled Fixed ESMs
-        # mod so cleaning/fixes are preserved in the translated output.
+        # Mirror MO2/VFS provider order: the real game Data directory is the
+        # lowest-priority provider, then enabled MO2 mods override it. This is
+        # required for stock VNV because the four preorder pack ESMs remain only
+        # in game Data, while FalloutNV.esm and the main DLC ESMs are overridden
+        # by the enabled Fixed ESMs mod.
+        self.add_tree(self.data, "game:Data")
         # MO2 persists modlist in descending priority: first enabled entry wins.
         for line in reversed(list_lines(self.profile_dir / "modlist.txt")):
             if line.startswith("+") and not line.endswith("_separator"):
