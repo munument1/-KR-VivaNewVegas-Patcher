@@ -189,6 +189,13 @@ def main():
             **stats,
         })
 
+    # v1.0.6 translation scope is deliberately narrow: existing MO2 plugins,
+    # MCM JSON and translation text files. Old radio/UI runtime overlays and
+    # translated texture payloads are not part of the SST patcher.
+    catalog.pop('asset_bundle', None)
+    catalog.pop('runtime_mods', None)
+    catalog.pop('radio_caption_backend', None)
+    catalog.pop('verified_delta_backend', None)
     catalog['verified_delta_files'] = 0
     catalog['plugin_translation_source'] = 'xTranslator SST direct + FalloutNV/DLC SST fallback'
     catalog['updated_plugin_backend'] = 'Python ctypes + XEditLib'
