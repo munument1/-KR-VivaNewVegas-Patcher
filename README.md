@@ -1,6 +1,6 @@
 # Viva New Vegas 한국어 패쳐
 
-Viva New Vegas(VNV)의 **현재 MO2 프로필에 실제로 설치된 파일**을 기준으로 한국어 Output을 만드는 패쳐입니다. 게임 설치 폴더의 원본 ESM/ESP를 번역 소스로 사용하지 않으며, 원본 VNV 설치도 직접 수정하지 않습니다.
+Viva New Vegas(VNV)의 **현재 MO2/VFS에서 실제로 이기는 파일**을 기준으로 한국어 Output을 만드는 패쳐입니다. 원본 VNV 설치는 직접 수정하지 않습니다.
 
 ## v1.0.6 변경점
 
@@ -36,20 +36,24 @@ v1.0.6부터 플러그인 번역 데이터의 기준을 **xTranslator SST**로 �
 
 ## 플러그인 원본 선택
 
-패쳐는 `ModOrganizer.ini`에서 현재 프로필과 실제 Mods 경로를 읽고 MO2의 winner 파일을 사용합니다.
+패쳐는 `ModOrganizer.ini`에서 현재 프로필과 실제 Mods 경로를 읽고 MO2의 VFS 우선순위를 그대로 따릅니다. 게임 `Data`를 최하위 provider로 보고, 활성화된 MO2 모드가 같은 경로를 제공하면 그 파일이 우선합니다.
 
 특히 공식 ESM은 다음 원칙을 따릅니다.
 
 ```text
-게임 설치 폴더\Data\FalloutNV.esm     ← 번역 소스로 사용하지 않음
-
-MO2\mods\Fixed ESMs\FalloutNV.esm    ← 실제 번역 원본
+게임 설치 폴더\Data\FalloutNV.esm     ← 최하위 provider
+MO2\mods\Fixed ESMs\FalloutNV.esm    ← 실제 winner
 MO2\mods\Fixed ESMs\DeadMoney.esm
 MO2\mods\Fixed ESMs\HonestHearts.esm
 ...
+
+게임 설치 폴더\Data\ClassicPack.esm   ← stock VNV에서는 이것이 실제 source
+게임 설치 폴더\Data\MercenaryPack.esm
+게임 설치 폴더\Data\TribalPack.esm
+게임 설치 폴더\Data\CaravanPack.esm
 ```
 
-따라서 VNV의 Fixed ESMs 정리/수정 내용이 번역본에서도 유지됩니다. Fixed ESMs 제공 파일을 찾을 수 없으면 게임 Data 파일로 자동 대체하지 않고 오류를 냅니다.
+따라서 `FalloutNV.esm`, `DeadMoney.esm`, `HonestHearts.esm`, `OldWorldBlues.esm`, `LonesomeRoad.esm`, `GunRunnersArsenal.esm`은 `Fixed ESMs`의 정리/수정본을 사용합니다. 반면 새 VNV 설치 기준 `ClassicPack.esm`, `MercenaryPack.esm`, `TribalPack.esm`, `CaravanPack.esm`은 `Fixed ESMs`에 없으므로 게임 `Data`의 파일이 정상 source입니다. 이 네 파일의 번역본은 게임 폴더에 쓰지 않고 Output의 `Fixed ESMs` 폴더에 넣어 MO2가 덮어쓰게 합니다.
 
 MO2의 `mods`, `profiles`, `overwrite`가 `ModOrganizer.ini`와 다른 드라이브에 있어도 지원합니다.
 
