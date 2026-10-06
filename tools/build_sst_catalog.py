@@ -77,7 +77,7 @@ def export_for_entry(sst_path: Path, old_entry: dict):
         'usable': 0,
         'mapped': 0,
         'zero_form_skipped': 0,
-        'unresolved_path': 0,
+        'pathless_direct': 0,
         'old_or_unchanged_skipped': 0,
     }
     for item in sst.entries:
@@ -91,7 +91,7 @@ def export_for_entry(sst_path: Path, old_entry: dict):
             stats['zero_form_skipped'] += 1
             continue
         if owner_index >= len(sst.plugins):
-            stats['unresolved_path'] += 1
+            stats['pathless_direct'] += 1
             continue
         owner = sst.plugins[owner_index]
         signature = item.rec[:4]
@@ -103,8 +103,11 @@ def export_for_entry(sst_path: Path, old_entry: dict):
             paths = loose.get(key[:-1], set())
         path = next(iter(paths)) if len(paths) == 1 else _derive_path(signature, field)
         if not path:
-            stats['unresolved_path'] += 1
-            continue
+            # Direct SST can still match safely by owner/FormID/signature/field/source.
+            # The worker rejects ambiguous destinations. Base/DLC fallback requires
+            # an exact path, so pathless rows are never used for inheritance.
+            path = ''
+            stats['pathless_direct'] += 1
         rows.append({
             'owner': owner.casefold(),
             'id': form_id,
@@ -221,7 +224,7 @@ def main():
         'direct_sst_plugins': sum(x['mode'] == 'direct_sst' for x in plugin_stats),
         'fallback_only_plugins': fallback_only,
         'direct_mappings': sum(x['mappings'] for x in plugin_stats),
-        'unresolved_paths': sum(x.get('unresolved_path', 0) for x in plugin_stats),
+        'pathless_direct_rows': sum(x.get('pathless_direct', 0) for x in plugin_stats),
         'zero_form_skipped': sum(x.get('zero_form_skipped', 0) for x in plugin_stats),
         'output': str(out),
     }
