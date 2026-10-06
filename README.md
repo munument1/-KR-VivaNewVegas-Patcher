@@ -77,18 +77,7 @@ fallback은 단순 영문 문자열 치환이 아닙니다. 원 소유자, FormI
 
 ## 사용 방법
 
-GitHub Releases에서 최신 패키지를 받은 뒤 압축을 풉니다.
-
-```text
-VNVKoreanPatcher/
-├─ VNVKoreanPatcher.exe
-├─ VNVKRXEditWorker.exe
-├─ TranslationData/
-└─ Backend/
-   ├─ XEditLib.dll
-   ├─ FalloutNV.Hardcoded.dat
-   └─ icudtl.dat
-```
+GitHub Releases의 **단일 실행 파일 `VNVKoreanPatcher.exe`**을 실행합니다. 별도 Node, Backend 폴더, TranslationData 폴더를 사용자가 관리할 필요가 없습니다. 실행 시 필요한 SST/XEditLib 리소스는 EXE 내부에서 임시로 풀어 사용합니다.
 
 `VNVKoreanPatcher.exe`를 실행하고 **`ModOrganizer.ini`가 있는 VNV MO2 인스턴스 폴더**를 선택합니다.
 
@@ -122,11 +111,11 @@ UTF-8 SST 적용
 → 저장본 fresh readback 검증
 ```
 
-전체 ESM/ESP 재로딩 횟수를 절반 수준으로 줄였습니다. CP1252 전체 재검증은 제거했지만 검증 자체를 없앤 것은 아닙니다. 저장 후 다시 열어 구조와 실제 번역 결과를 확인하고, UTF-8로 안전하게 읽히지 않는 문자열은 수정하지 않습니다.
+CP1252 전체 재검증은 제거했지만 검증 자체를 없앤 것은 아닙니다. 저장 후 다시 열어 구조와 실제 번역 결과를 확인하고, UTF-8로 안전하게 읽히지 않는 문자열은 수정하지 않습니다. 다만 v1.0.6은 xdelta 빠른 경로도 제거하고 모든 대상 플러그인을 SST/XEditLib로 처리하므로, 전체 생성 시간은 플러그인 수와 ESM 크기에 따라 수 분 걸릴 수 있습니다.
 
 ## 방화벽/Defender 관련
 
-v1.0.5까지는 Node 런타임과 Koffi를 통해 XEditLib을 호출했습니다. v1.0.6은 Node와 Koffi를 포함하지 않습니다. 패키지의 Python XEdit 워커가 `XEditLib.dll`을 직접 호출하며 네트워크 연결은 필요하지 않습니다.
+v1.0.5까지는 Node 런타임과 Koffi를 통해 XEditLib을 호출했습니다. v1.0.6은 Node와 Koffi를 포함하지 않습니다. EXE 내부의 Python XEdit 워커가 `XEditLib.dll`을 직접 호출하며 네트워크 연결은 필요하지 않습니다. PyInstaller 단일 EXE 자체는 코드 서명이 없으므로 Windows SmartScreen 경고가 뜰 수 있지만, Node 프로세스 때문에 발생하던 방화벽 경로는 제거했습니다.
 
 ## 패치 결과 보고서
 
