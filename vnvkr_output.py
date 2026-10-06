@@ -20,11 +20,14 @@ from tools.loose_translation import TOKEN, decode, json_values
 
 SCHEMA = 1
 
-BASE_TRANSLATION_MASTERS = {
+FIXED_ESM_MASTERS = {
     'falloutnv.esm', 'deadmoney.esm', 'honesthearts.esm', 'oldworldblues.esm',
-    'lonesomeroad.esm', 'gunrunnersarsenal.esm', 'classicpack.esm',
-    'mercenarypack.esm', 'tribalpack.esm', 'caravanpack.esm',
+    'lonesomeroad.esm', 'gunrunnersarsenal.esm',
 }
+STARTER_PACK_MASTERS = {
+    'classicpack.esm', 'mercenarypack.esm', 'tribalpack.esm', 'caravanpack.esm',
+}
+BASE_TRANSLATION_MASTERS = FIXED_ESM_MASTERS | STARTER_PACK_MASTERS
 PLUGIN_SUFFIXES = {'.esm', '.esp'}
 
 
@@ -390,8 +393,35 @@ def merge_loose(source, entry):
                                    'unmatched': len(missing), 'unmatched_entries': missing}
 
 
+def fixed_esm_mod(installation):
+    """Return the enabled MO2 mod folder that provides FalloutNV.esm."""
+    chain = installation.providers.get('falloutnv.esm', [])
+    if not chain:
+        raise ValueError('Enabled Fixed ESMs provider for FalloutNV.esm was not found')
+    provider_file = Path(chain[-1]['physical']).resolve()
+    if not provider_file.is_relative_to(installation.mods):
+        raise ValueError('FalloutNV.esm is not provided by the configured MO2 Mods directory')
+    relative = provider_file.relative_to(installation.mods)
+    if len(relative.parts) < 2:
+        raise ValueError('Invalid Fixed ESMs provider path')
+    return relative.parts[0]
+
+
+def source_for_plugin(installation, plugin):
+    """Resolve a translation source without using raw game Data except starter packs."""
+    key = plugin.casefold()
+    chain = installation.providers.get(key)
+    if chain:
+        return installation.source(plugin), chain[-1]['provider']
+    if key in STARTER_PACK_MASTERS:
+        source = (installation.data / plugin).resolve()
+        if source.is_file():
+            return source, 'game:Data'
+    raise ValueError(f'No enabled translation source: {plugin}')
+
+
 def destination(installation, source, virtual=None):
-    """Map a physical MO2 provider to the portable manual-copy Output tree."""
+    """Map a physical provider to the portable manual-copy Output tree."""
     resolved = source.resolve()
     if resolved.is_relative_to(installation.mods):
         relative = resolved.relative_to(installation.mods)
@@ -399,6 +429,11 @@ def destination(installation, source, virtual=None):
     if resolved.is_relative_to(installation.overwrite):
         relative = resolved.relative_to(installation.overwrite)
         return vnvkr.virtual_path((Path('overwrite') / relative).as_posix())
+    if virtual and virtual.casefold() in STARTER_PACK_MASTERS and resolved.is_relative_to(installation.data.resolve()):
+        # The four Courier's Stash pack ESMs are normally only in the real game
+        # Data directory. Never overwrite Data: publish translated copies into
+        # the enabled Fixed ESMs mod so MO2 wins them at runtime.
+        return vnvkr.virtual_path(f'mods/{fixed_esm_mod(installation)}/{virtual}')
     if resolved.is_relative_to(installation.root):
         return vnvkr.virtual_path(resolved.relative_to(installation.root).as_posix())
     raise ValueError(f'Source is outside the configured MO2 storage; cannot mirror it in Output: {source}')
@@ -484,10 +519,12 @@ def build_output(installation, catalog_dir, output, progress=None):
         active_native = [entry for entry in work_entries if entry['kind'] == 'plugin-records'
                          and not entry.get('optional')
                          and entry['path'].casefold() in installation.active_keys
-                         and entry['path'].casefold() in installation.providers]
+                         and (entry['path'].casefold() in installation.providers
+                              or (entry['path'].casefold() in STARTER_PACK_MASTERS
+                                  and (installation.data / entry['path']).is_file()))]
         fast_native = {}
         for entry in active_native:
-            source = installation.source(entry['path'])
+            source, _provider = source_for_plugin(installation, entry['path'])
             fast = verified_delta(entry, catalog_dir, source)
             if fast:
                 fast_native[entry['path'].casefold()] = fast
@@ -496,8 +533,15 @@ def build_output(installation, catalog_dir, output, progress=None):
         if native_entries:
             emit(f'플러그인 {len(native_entries)}개에 SST 번역을 적용합니다.')
             native_target_names = {entry['path'] for entry in native_entries}
+            starter_overrides = {
+                entry['path']: (installation.data / entry['path']).resolve()
+                for entry in native_entries
+                if entry['path'].casefold() in STARTER_PACK_MASTERS
+                and entry['path'].casefold() not in installation.providers
+            }
             native_files, native_stats = vnvkr_xedit.merge_plugins(
                 installation, native_entries, catalog, Path(tmp) / 'NativeJob',
+                source_overrides=starter_overrides,
                 fallback_mappings=inheritance_memory,
                 fallback_targets=fallback_targets & native_target_names,
                 progress=progress)
@@ -514,18 +558,22 @@ def build_output(installation, catalog_dir, output, progress=None):
                     report['skipped'].append({'path': entry['path'], 'provider': entry['provider'], 'reason': 'not_installed'})
                     continue
             else:
-                if not chain:
-                    if key in BASE_TRANSLATION_MASTERS:
-                        raise ValueError(
-                            f'{entry["path"]} has no enabled MO2 provider. '
-                            'VNV official ESMs must come from the enabled Fixed ESMs mod; '
-                            'the game Data folder is intentionally not used as a translation source.')
-                    report['skipped'].append({'path': entry['path'], 'reason': 'not_installed'})
-                    continue
                 if entry['kind'] in {'plugin-copy', 'plugin-records'} and key not in installation.active_keys:
                     report['skipped'].append({'path': entry['path'], 'reason': 'not_enabled'})
                     continue
-                source = installation.source(entry['path'])
+                if not chain:
+                    if key in STARTER_PACK_MASTERS and (installation.data / entry['path']).is_file():
+                        source = (installation.data / entry['path']).resolve()
+                        chain = [{'provider': 'game:Data'}]
+                    elif key in FIXED_ESM_MASTERS:
+                        raise ValueError(
+                            f'{entry["path"]} has no enabled MO2 provider. '
+                            'VNV core/DLC ESMs must come from the enabled Fixed ESMs mod.')
+                    else:
+                        report['skipped'].append({'path': entry['path'], 'reason': 'not_installed'})
+                        continue
+                else:
+                    source = installation.source(entry['path'])
             original_hash = vnvkr.sha256(source)
             relative = destination(installation, source, entry['path'])
             if relative.casefold() in seen:
