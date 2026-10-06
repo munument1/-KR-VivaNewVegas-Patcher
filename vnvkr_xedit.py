@@ -33,11 +33,12 @@ def validate_mapping(row):
 
 
 def runtime():
-    root = Path(sys.executable).parent if getattr(sys, 'frozen', False) else Path(__file__).resolve().parent
     if getattr(sys, 'frozen', False):
+        root = Path(getattr(sys, '_MEIPASS', Path(sys.executable).parent)).resolve()
         worker = root / 'VNVKRXEditWorker.exe'
         backend = root / 'Backend'
     else:
+        root = Path(__file__).resolve().parent
         worker = root / '.tools/vnvkr-xedit-worker/VNVKRXEditWorker.exe'
         backend = root / '.tools/xeditlib-native'
     for required in (
