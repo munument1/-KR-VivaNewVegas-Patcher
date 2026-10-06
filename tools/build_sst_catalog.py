@@ -1,0 +1,226 @@
+"""Build the VNV release catalog from xTranslator SST dictionaries."""
+from __future__ import annotations
+
+import argparse
+import json
+from collections import defaultdict
+from pathlib import Path
+import shutil
+import sys
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+
+import vnvkr
+from vnvkr_sst import read_sst
+
+FLAT_SIGNATURES = {
+    'CELL','WRLD','REFR','ACRE','ACTI','ARMO','ARMA','WEAP','MISC','KEYM',
+    'ALCH','CLAS','RACE','HDPT','HAIR','EYES','CSNO','AMEF','REPU','RCCT',
+    'FURN','MSET','COBJ','IMOD','CMNY','LIGH','GMST','PROJ','CCRD','DOOR',
+    'NPC_','CREA','CONT','ENCH','TACT','MGEF','AMMO','CDCK','BOOK','RCPE',
+    'MSTT','CHAL','INGR','CHIP','SPEL','NOTE','EXPL','DIAL','LSCR','WATR','ALOC',
+}
+
+OFFICIAL = {
+    'falloutnv.esm','deadmoney.esm','honesthearts.esm','oldworldblues.esm',
+    'lonesomeroad.esm','gunrunnersarsenal.esm','classicpack.esm',
+    'mercenarypack.esm','tribalpack.esm','caravanpack.esm',
+}
+
+
+def _usable(entry) -> bool:
+    if entry.rec.startswith('TES4') or entry.rec == '********':
+        return False
+    status_flags = (entry.flags >> 8) & 0xFF
+    if status_flags & 0x40:
+        return False
+    return bool(entry.source and entry.source != entry.dest
+                and '\ufffd' not in entry.source and '\ufffd' not in entry.dest)
+
+
+def _structural_index(entry: dict):
+    exact = defaultdict(set)
+    loose = defaultdict(set)
+    for row in entry.get('mappings', []):
+        key = (
+            row.get('owner', '').casefold(),
+            row.get('id', '').casefold(),
+            row.get('signature', ''),
+            row.get('field', ''),
+            row.get('source', ''),
+        )
+        if row.get('path'):
+            exact[key].add(row['path'])
+            loose[key[:-1]].add(row['path'])
+    return exact, loose
+
+
+def _derive_path(signature: str, field: str):
+    if signature not in FLAT_SIGNATURES:
+        return None
+    if signature == 'REFR' and field == 'FULL':
+        return None
+    if signature == 'NOTE' and field == 'TNAM':
+        return r'TNAM\Text'
+    return field
+
+
+def export_for_entry(sst_path: Path, old_entry: dict):
+    sst = read_sst(sst_path)
+    if not sst.plugins:
+        raise ValueError(f'SST has no plugin header: {sst_path}')
+    exact, loose = _structural_index(old_entry)
+    rows = []
+    stats = {
+        'sst_entries': len(sst.entries),
+        'usable': 0,
+        'mapped': 0,
+        'zero_form_skipped': 0,
+        'unresolved_path': 0,
+        'old_or_unchanged_skipped': 0,
+    }
+    for item in sst.entries:
+        if not _usable(item):
+            stats['old_or_unchanged_skipped'] += 1
+            continue
+        stats['usable'] += 1
+        local_id = item.form_id & 0x00FFFFFF
+        owner_index = (item.form_id >> 24) & 0xFF
+        if local_id == 0:
+            stats['zero_form_skipped'] += 1
+            continue
+        if owner_index >= len(sst.plugins):
+            stats['unresolved_path'] += 1
+            continue
+        owner = sst.plugins[owner_index]
+        signature = item.rec[:4]
+        field = item.rec[4:]
+        form_id = f'{local_id:06x}'
+        key = (owner.casefold(), form_id, signature, field, item.source)
+        paths = exact.get(key, set())
+        if len(paths) != 1:
+            paths = loose.get(key[:-1], set())
+        path = next(iter(paths)) if len(paths) == 1 else _derive_path(signature, field)
+        if not path:
+            stats['unresolved_path'] += 1
+            continue
+        rows.append({
+            'owner': owner.casefold(),
+            'id': form_id,
+            'signature': signature,
+            'field': field,
+            'path': path,
+            'source': item.source,
+            'dest': item.dest,
+            'rec_id': item.rec_id,
+            'rec_id_max': item.rec_id_max,
+            'string_id': item.string_id,
+            'origin': 'sst_direct',
+        })
+        stats['mapped'] += 1
+    return rows, stats, sst
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--base-catalog', type=Path, required=True)
+    parser.add_argument('--sst-dir', type=Path, required=True)
+    parser.add_argument('--output', type=Path, required=True)
+    args = parser.parse_args()
+
+    base = args.base_catalog.resolve()
+    out = args.output.resolve()
+    if out.exists():
+        shutil.rmtree(out)
+    shutil.copytree(base, out)
+    catalog_path = out / 'catalog.json'
+    catalog = vnvkr.read_json(catalog_path)
+
+    by_target = {}
+    for path in args.sst_dir.glob('*_en_ko.sst'):
+        sst = read_sst(path)
+        if not sst.plugins:
+            continue
+        target = sst.plugins[-1].casefold()
+        if target in by_target:
+            raise ValueError(f'Duplicate direct SST target {target}: {by_target[target].name}, {path.name}')
+        by_target[target] = path
+
+    plugin_stats = []
+    fallback_only = []
+    for entry in catalog.get('files', []):
+        if entry.get('kind') != 'plugin-records':
+            continue
+
+        # xdelta outputs belong to the old mapping snapshot and must never bypass
+        # the authoritative SST pipeline.
+        entry.pop('verified_delta', None)
+        old_rows = list(entry.get('mappings', []))
+        owner_hints = sorted({
+            row.get('owner', '').casefold() for row in old_rows
+            if row.get('owner', '').casefold() in OFFICIAL
+        })
+        if owner_hints:
+            entry['fallback_owner_hints'] = owner_hints
+
+        sst_path = by_target.get(entry['path'].casefold())
+        if not sst_path:
+            entry['mappings'] = []
+            entry['fallback_only'] = True
+            entry['translation_source'] = 'base_dlc_sst_fallback'
+            fallback_only.append(entry['path'])
+            plugin_stats.append({'plugin': entry['path'], 'mode': 'fallback_only', 'mappings': 0})
+            continue
+
+        rows, stats, sst = export_for_entry(sst_path, entry)
+        entry['mappings'] = rows
+        entry['sst_source'] = sst_path.name
+        entry['sst_format'] = sst.format
+        entry['sst_plugins'] = sst.plugins
+        entry['sst_stats'] = stats
+        entry['translation_source'] = 'xtranslator_sst'
+        entry.pop('fallback_only', None)
+        plugin_stats.append({
+            'plugin': entry['path'],
+            'mode': 'direct_sst',
+            'sst': sst_path.name,
+            'mappings': len(rows),
+            **stats,
+        })
+
+    catalog['verified_delta_files'] = 0
+    catalog['plugin_translation_source'] = 'xTranslator SST direct + FalloutNV/DLC SST fallback'
+    catalog['updated_plugin_backend'] = 'Python ctypes + XEditLib'
+    catalog['sst_source_policy'] = {
+        'authoritative_source': 'xTranslator UserDictionaries/FalloutNV',
+        'direct_priority': True,
+        'fallback_masters': sorted(OFFICIAL),
+        'zero_form_policy': 'skip_unstable_source_only_rows',
+        'path_metadata': 'reviewed catalog path or safe flat-field derivation',
+    }
+    catalog['sst_build'] = {
+        'source_files': len(by_target),
+        'fallback_only_plugins': fallback_only,
+        'plugins': plugin_stats,
+    }
+    vnvkr.write_json(catalog_path, catalog)
+
+    deltas = out / 'verified-deltas'
+    if deltas.exists():
+        shutil.rmtree(deltas)
+
+    report = {
+        'direct_sst_plugins': sum(x['mode'] == 'direct_sst' for x in plugin_stats),
+        'fallback_only_plugins': fallback_only,
+        'direct_mappings': sum(x['mappings'] for x in plugin_stats),
+        'unresolved_paths': sum(x.get('unresolved_path', 0) for x in plugin_stats),
+        'zero_form_skipped': sum(x.get('zero_form_skipped', 0) for x in plugin_stats),
+        'output': str(out),
+    }
+    vnvkr.write_json(out / 'sst-build-report.json', report)
+    print(json.dumps(report, ensure_ascii=False, indent=2))
+
+
+if __name__ == '__main__':
+    main()
