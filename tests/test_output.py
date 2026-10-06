@@ -221,18 +221,33 @@ class OutputTests(unittest.TestCase):
             self.build()
         self.assertFalse(self.out.exists())
 
-    def test_official_pack_from_game_data_goes_to_enabled_master_mod(self):
+    def test_official_pack_uses_mo2_fixed_master_not_game_data(self):
         (self.mod / 'FalloutNV.esm').write_bytes(b'synthetic fixed master')
-        (self.game / 'Data/CaravanPack.esm').write_bytes(b'synthetic pack')
+        (self.mod / 'CaravanPack.esm').write_bytes(b'synthetic fixed caravan')
+        (self.game / 'Data/CaravanPack.esm').write_bytes(b'synthetic raw game caravan')
+        profile = self.mo2 / 'profiles/Extended'
+        (profile / 'plugins.txt').write_text('FalloutNV.esm\nCaravanPack.esm\n', encoding='cp1252')
+        (profile / 'loadorder.txt').write_text('FalloutNV.esm\nCaravanPack.esm\n', encoding='utf-8')
+        plugin = {**self.plugin, 'path': 'CaravanPack.esm',
+                  'baseline_sha256': vnvkr.sha256(self.mod / 'CaravanPack.esm')}
+        vnvkr.write_json(self.catalog / 'catalog.json', {'schema_version': 1, 'files': [plugin]})
+        self.build()
+        self.assertEqual((self.out / 'mods/Renamed Mod/CaravanPack.esm').read_bytes(),
+                         b'synthetic Korean plugin')
+        self.assertEqual((self.game / 'Data/CaravanPack.esm').read_bytes(),
+                         b'synthetic raw game caravan')
+
+    def test_official_pack_without_fixed_esm_provider_is_rejected(self):
+        (self.game / 'Data/CaravanPack.esm').write_bytes(b'synthetic raw game caravan')
         profile = self.mo2 / 'profiles/Extended'
         (profile / 'plugins.txt').write_text('FalloutNV.esm\nCaravanPack.esm\n', encoding='cp1252')
         (profile / 'loadorder.txt').write_text('FalloutNV.esm\nCaravanPack.esm\n', encoding='utf-8')
         plugin = {**self.plugin, 'path': 'CaravanPack.esm',
                   'baseline_sha256': vnvkr.sha256(self.game / 'Data/CaravanPack.esm')}
         vnvkr.write_json(self.catalog / 'catalog.json', {'schema_version': 1, 'files': [plugin]})
-        self.build()
-        self.assertEqual((self.out / 'mods/Renamed Mod/CaravanPack.esm').read_bytes(), b'synthetic Korean plugin')
-        self.assertEqual((self.game / 'Data/CaravanPack.esm').read_bytes(), b'synthetic pack')
+        with self.assertRaisesRegex(ValueError, 'Fixed ESMs'):
+            self.build()
+        self.assertFalse(self.out.exists())
 
     def test_optional_variant_copies_do_not_enable_plugins(self):
         optional = self.mo2 / 'mods/Optional'
