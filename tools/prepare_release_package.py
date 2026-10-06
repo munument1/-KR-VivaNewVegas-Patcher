@@ -8,6 +8,17 @@ import shutil
 import vnvkr
 
 
+def validate_catalog(catalog):
+    native = [entry for entry in catalog.get('files', []) if entry.get('kind') == 'plugin-records']
+    invalid = [
+        entry['path'] for entry in native
+        if not entry.get('mappings') and not entry.get('fallback_only')
+    ]
+    if invalid:
+        raise ValueError(f'Plugin has neither direct SST nor fallback policy: {invalid}')
+    return native
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--dist', type=Path, required=True)
@@ -22,13 +33,7 @@ def main():
         raise FileNotFoundError(args.worker)
 
     catalog = vnvkr.read_json(args.catalog / 'catalog.json')
-    native = [entry for entry in catalog.get('files', []) if entry.get('kind') == 'plugin-records']
-    invalid = [
-        entry['path'] for entry in native
-        if not entry.get('mappings') and not entry.get('fallback_only')
-    ]
-    if invalid:
-        raise ValueError(f'Plugin has neither direct SST nor fallback policy: {invalid}')
+    validate_catalog(catalog)
 
     data = args.dist / 'TranslationData'
     backend = args.dist / 'Backend'
