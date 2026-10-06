@@ -60,8 +60,8 @@ def main():
     readme.write_text(
         '# Viva New Vegas 한국어 패쳐\n\n'
         'VNVKoreanPatcher.exe를 실행하고 ModOrganizer.ini가 있는 VNV MO2 인스턴스 폴더를 선택합니다.\n'
-        '패쳐는 게임 Data가 아니라 현재 MO2 프로필의 실제 ESP/ESM 제공 파일을 읽습니다.\n'
-        'FalloutNV.esm 및 공식 DLC/팩 ESM은 활성화된 Fixed ESMs 파일을 기준으로 처리합니다.\n\n'
+        '패쳐는 MO2/VFS의 실제 winner ESP/ESM을 읽습니다. Data는 최하위 provider입니다.\n'
+        'FalloutNV.esm과 주요 DLC ESM은 Fixed ESMs를 사용하고, Classic/Mercenary/Tribal/CaravanPack은 stock VNV처럼 Data 파일을 source로 허용하되 번역본은 Fixed ESMs Output에 배치합니다.\n\n'
         '- 플러그인 번역 원본: xTranslator SST\n'
         '- 전용 SST가 없는 플러그인: 본편+DLC SST의 정확히 일치하는 override 문자열만 fallback 적용\n'
         '- MCM JSON 및 Translations 텍스트: 현재 MO2 파일에 검증된 번역만 병합\n'
