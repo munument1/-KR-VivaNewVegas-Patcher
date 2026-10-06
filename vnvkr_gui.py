@@ -14,13 +14,22 @@ from vnvkr_output import build_output
 
 
 def program_folder():
+    """Writable folder beside the user-facing executable."""
     return Path(sys.executable).resolve().parent if getattr(sys, 'frozen', False) else Path(__file__).resolve().parent
+
+
+def resource_folder():
+    """Read-only packaged resources; PyInstaller onefile extracts these to _MEIPASS."""
+    if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
+        return Path(sys._MEIPASS).resolve()
+    return Path(__file__).resolve().parent
 
 
 class App:
     def __init__(self, window):
         self.window = window
         self.folder = program_folder()
+        self.resources = resource_folder()
         self.events = queue.Queue()
         self.output = None
         self.report_file = None
@@ -59,9 +68,9 @@ class App:
                 'mods 폴더가 아니라 ModOrganizer.ini가 있는 VNV MO2 인스턴스 폴더를 선택해주세요.\n'
                 '패쳐는 해당 INI에서 현재 프로필과 mods 경로를 읽습니다.')
             return
-        catalog = self.folder / 'TranslationData'
+        catalog = self.resources / 'TranslationData'
         if not (catalog / 'catalog.json').is_file():
-            catalog = self.folder / 'bundles/records-release-20261003'
+            catalog = self.resources / 'bundles/sst-release-20261006'
             if not (catalog / 'catalog.json').is_file():
                 messagebox.showerror('번역 데이터 확인', '검증된 TranslationData 폴더가 필요합니다. 패쳐와 함께 제공된 파일을 확인해주세요.')
                 return
