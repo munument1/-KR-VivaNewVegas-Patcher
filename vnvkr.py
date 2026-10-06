@@ -17,7 +17,7 @@ import tempfile
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 
-VERSION = "1.0.4"
+VERSION = "1.0.5"
 ROOT = Path(__file__).resolve().parent
 RESERVED = {"meta.ini", ".vnv-kr-report.json"}
 HASH = re.compile(r"[0-9a-f]{64}\Z")
@@ -144,7 +144,10 @@ class Installation:
                                                       "physical": str(resolved), "category": category})
 
     def scan(self):
-        self.add_tree(self.data, "game:Data")
+        # Translation sources come only from the selected MO2 profile. The real
+        # game Data folder is validated in __init__, but is never registered as
+        # a provider: VNV's official masters must come from the enabled Fixed ESMs
+        # mod so cleaning/fixes are preserved in the translated output.
         # MO2 persists modlist in descending priority: first enabled entry wins.
         for line in reversed(list_lines(self.profile_dir / "modlist.txt")):
             if line.startswith("+") and not line.endswith("_separator"):
