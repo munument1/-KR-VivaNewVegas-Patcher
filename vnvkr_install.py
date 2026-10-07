@@ -144,6 +144,10 @@ def _install_output(installation, output, report, snapshot, progress=None):
     require_mo2_closed()
     if profile_snapshot(installation) != snapshot:
         raise ValueError('MO2 프로필 또는 경로 설정이 변경되었습니다. 다시 설치해주세요.')
+    data = installation.data.resolve()
+    for storage in (installation.mods, installation.overwrite, installation.profile_dir):
+        if storage.is_relative_to(data) or data.is_relative_to(storage):
+            raise ValueError('MO2 storage overlaps game Data')
     output = Path(output).resolve()
     updates, mods, plugins = profile_updates(installation, report, snapshot)
     planned, deletes, seen = [], [], set()
@@ -182,6 +186,8 @@ def _install_output(installation, output, report, snapshot, progress=None):
         source.write_bytes(raw)
         planned.append((source, path, vnvkr.sha256(source)))
     for i, (source, target, after) in enumerate([*planned, *((None, path, None) for path in deletes)]):
+        if target.exists() and not target.is_file():
+            raise ValueError(f'Install destination is not a file: {target}')
         before = vnvkr.sha256(target) if target.is_file() else None
         saved = f'original/{i}' if before else None
         if saved:
@@ -192,7 +198,7 @@ def _install_output(installation, output, report, snapshot, progress=None):
                 raise ValueError('Backup readback failed')
         records.append({'target': str(target), 'backup': saved,
                         'before_sha256': before, 'after_sha256': after})
-    manifest = {'state': 'installing', 'profile': installation.profile,
+    manifest = {'state': 'prepared', 'profile': installation.profile,
                 'created_utc': datetime.now(timezone.utc).isoformat(), 'files': records}
     vnvkr.write_json(backup / 'install.json', manifest)
     require_mo2_closed()
@@ -202,6 +208,8 @@ def _install_output(installation, output, report, snapshot, progress=None):
         target = Path(record['target'])
         if (vnvkr.sha256(target) if target.is_file() else None) != record['before_sha256']:
             raise ValueError(f'Install target changed: {target}')
+    manifest['state'] = 'installing'
+    vnvkr.write_json(backup / 'install.json', manifest)
     applied = []
     try:
         if progress:

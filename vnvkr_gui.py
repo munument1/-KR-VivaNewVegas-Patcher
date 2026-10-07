@@ -193,7 +193,14 @@ def packaged_self_test(mo2_root):
 
 if __name__ == '__main__':
     if len(sys.argv) >= 3 and sys.argv[1] == '--restore':
-        restore_backup(Path(sys.argv[2]))
+        window = tk.Tk()
+        window.withdraw()
+        try:
+            restore_backup(Path(sys.argv[2]))
+        except Exception as error:
+            messagebox.showerror('복구 실패', str(error))
+            raise SystemExit(1)
+        messagebox.showinfo('복구 완료', '설치 전 파일과 프로필을 복구했습니다.')
         raise SystemExit(0)
     if len(sys.argv) >= 2 and sys.argv[1] == '--package-check':
         packaged_resources_check()

@@ -13,6 +13,33 @@ UPSTREAM_COMMIT = '7355fd3f2e008dc252ac484f9b376c153e584455'
 BASE_RELEASE_SHA256 = 'e5826584fcc7ae7d4df7f7a58b612baca04fb1374a9d0b4582776fb96d27f247'
 
 
+def resource_item(data, path, destination):
+    return {'path': destination, 'payload': path.relative_to(data).as_posix(),
+            'payload_sha256': vnvkr.sha256(path)}
+
+
+def restore_resource_declarations(data, catalog):
+    # v1.0.6.1 carries these trusted payloads but its SST catalog lost the
+    # metadata during rebuilding. Restore their installation declarations.
+    runtime_specs = []
+    for mod, plugins in [('VNV Korean UI Strings', ['VNVKR UI Strings.esp']),
+                         ('VNV Korean Radio Captions', [])]:
+        directory = data / 'runtime-payloads' / mod
+        files = [resource_item(data, path, path.relative_to(directory).as_posix())
+                 for path in sorted(directory.rglob('*')) if path.is_file()]
+        if not files or any(not (directory / name).is_file() for name in plugins):
+            raise ValueError(f'Missing packaged Korean runtime mod: {mod}')
+        runtime_specs.append({'mod': mod, 'plugins': plugins, 'files': files})
+    catalog['runtime_mods'] = runtime_specs
+    directory = data / 'asset-payloads'
+    textures = [resource_item(data, path, path.relative_to(directory).as_posix())
+                for path in sorted(directory.rglob('*')) if path.is_file() and path.suffix.lower() == '.dds']
+    if not textures:
+        raise ValueError('Missing packaged Korean terminal textures')
+    catalog['asset_bundle'] = {'default_mod': catalog['font_bundle']['default_mod'], 'files': textures}
+
+
+
 def prepare(release: Path, source: Path, output: Path):
     if vnvkr.sha256(release) != BASE_RELEASE_SHA256:
         raise ValueError('The base release does not match v1.0.6.1')
@@ -70,24 +97,7 @@ def prepare(release: Path, source: Path, output: Path):
         return {'path': destination, 'payload': path.relative_to(data).as_posix(),
                 'payload_sha256': vnvkr.sha256(path)}
 
-    # v1.0.6.1 carries these trusted payloads but its SST catalog lost the
-    # metadata during rebuilding. Restore their installation declarations.
-    runtime_specs = []
-    for mod, plugins in [('VNV Korean UI Strings', ['VNVKR UI Strings.esp']),
-                         ('VNV Korean Radio Captions', [])]:
-        directory = data / 'runtime-payloads' / mod
-        files = [item(path, path.relative_to(directory).as_posix())
-                 for path in sorted(directory.rglob('*')) if path.is_file()]
-        if not files or any(not (directory / name).is_file() for name in plugins):
-            raise ValueError(f'Missing packaged Korean runtime mod: {mod}')
-        runtime_specs.append({'mod': mod, 'plugins': plugins, 'files': files})
-    catalog['runtime_mods'] = runtime_specs
-    directory = data / 'asset-payloads'
-    textures = [item(path, path.relative_to(directory).as_posix())
-                for path in sorted(directory.rglob('*')) if path.is_file() and path.suffix.lower() == '.dds']
-    if not textures:
-        raise ValueError('Missing packaged Korean terminal textures')
-    catalog['asset_bundle'] = {'default_mod': catalog['font_bundle']['default_mod'], 'files': textures}
+    restore_resource_declarations(data, catalog)
 
     catalog['font_bundle']['runtime_patch'] = {
         **item(assets / 'tnvse.dll', 'NVSE/plugins/tnvse.dll'),
