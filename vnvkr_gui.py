@@ -1,4 +1,4 @@
-"""Small local Output generator. No game/MO2 installation writes."""
+"""Build and install translations into the selected MO2 profile."""
 from datetime import datetime
 import os
 from pathlib import Path
@@ -11,6 +11,7 @@ from tkinter import filedialog, messagebox, ttk
 
 import vnvkr
 from vnvkr_output import build_output
+from vnvkr_install import install_output, profile_snapshot, require_mo2_closed, restore_backup
 
 
 def program_folder():
@@ -44,13 +45,13 @@ class App:
         ttk.Entry(frame, textvariable=self.mo2).grid(row=1, column=0, sticky='ew', pady=(6, 16))
         self.browse = ttk.Button(frame, text='찾아보기', command=self.choose)
         self.browse.grid(row=1, column=1, padx=(8, 0), pady=(6, 16))
-        self.generate = ttk.Button(frame, text='Output 생성', command=self.start)
+        self.generate = ttk.Button(frame, text='한국어 패치 설치', command=self.start)
         self.generate.grid(row=2, column=0, sticky='w')
         self.open_button = ttk.Button(frame, text='Output 폴더 열기', command=self.open_output, state='disabled')
         self.open_button.grid(row=2, column=1)
         self.report_button = ttk.Button(frame, text='패치 결과 보기', command=self.open_report, state='disabled')
         self.report_button.grid(row=2, column=2, padx=(8, 0))
-        self.status = tk.StringVar(value='Output 안의 mods 폴더를 선택한 MO2 폴더로 복사하면 됩니다.')
+        self.status = tk.StringVar(value='MO2를 종료하고 설치하세요. 선택한 프로필의 번역 모드와 플러그인을 자동으로 활성화합니다.')
         ttk.Label(frame, textvariable=self.status, wraplength=740, justify='left').grid(
             row=3, column=0, columnspan=3, sticky='w', pady=(18, 0))
         window.after(150, self.poll)
@@ -83,13 +84,16 @@ class App:
         self.open_button.configure(state='disabled')
         self.report_button.configure(state='disabled')
         self.report_file = None
-        self.status.set('선택한 프로필의 원본을 읽고 Output을 생성하고 있습니다.')
+        self.status.set('선택한 프로필의 번역 파일을 준비하고 있습니다.')
 
         def run():
             try:
-                report = build_output(
-                    vnvkr.Installation(root), catalog, target,
-                    progress=lambda message: self.events.put(('status', message)))
+                require_mo2_closed()
+                installation = vnvkr.Installation(root)
+                snapshot = profile_snapshot(installation)
+                progress = lambda message: self.events.put(('status', message))
+                report = build_output(installation, catalog, target, progress=progress)
+                install_output(installation, target, report, snapshot, progress=progress)
                 self.events.put(('done', target, report))
             except Exception as error:
                 self.events.put(('error', str(error)))
@@ -108,35 +112,22 @@ class App:
             self.generate.configure(state='normal')
             self.browse.configure(state='normal')
             if event[0] == 'error':
-                self.status.set('Output 생성에 실패했습니다. 원본 설치는 변경하지 않았습니다.')
-                messagebox.showerror('생성 실패', event[1])
+                self.status.set('설치를 완료하지 못했습니다. 오류 내용과 백업을 확인해주세요.')
+                messagebox.showerror('설치 실패', event[1])
             else:
                 _, self.output, report = event
                 unmatched = sum(row.get('unmatched', 0) for row in report['files'])
                 outcomes = report.get('plugin_outcomes', [])
                 count = lambda category: sum(row.get('category') == category for row in outcomes)
-                fonts = report.get('fonts', {})
-                activation = (f'\nMO2에서 "{fonts["mod"]}" 모드를 체크하고 tNVSE보다 아래에 배치해주세요.'
-                              if fonts.get('requires_activation') or fonts.get('requires_priority_check') else '')
-                extra = set(report.get('assets', {}).get('mods_requiring_activation', []))
-                runtime = report.get('runtime_mods', {})
-                extra.update(runtime.get('mods_requiring_activation', []))
-                if fonts.get('requires_activation'):
-                    extra.discard(fonts['mod'])
-                if extra:
-                    activation += '\nMO2에서 다음 번역 모드도 체크해주세요: ' + ', '.join(sorted(extra))
-                plugins = runtime.get('plugins_requiring_activation', [])
-                if plugins:
-                    activation += '\nMO2 플러그인 목록에서 다음 ESP도 체크해주세요: ' + ', '.join(plugins)
                 plugin_summary = (
                     f"플러그인: 정상 {count('patched')} · 이미적용 {count('already_patched')} · "
                     f"업데이트 전체적용 {count('updated_patched')} · 업데이트 일부미적용 {count('updated_partial')} · "
                     f"업데이트 미적용 {count('updated_untranslated')} · 제거 {count('removed')} · "
                     f"신규상속 {count('new_inherited')} · 신규미대응 {count('new_no_match')}"
                 )
-                self.status.set(f"{len(report['files'])}개 파일 생성 완료 · 미대응 항목 {unmatched}개 · 제외 파일 {len(report['skipped'])}개\n"
+                self.status.set(f"{len(report['files'])}개 파일 설치 완료 · 미대응 항목 {unmatched}개 · 제외 파일 {len(report['skipped'])}개\n"
                                 f"{plugin_summary}\n{self.output}\n"
-                                f"Output 안의 mods 폴더를 선택한 MO2 폴더로 복사해주세요.{activation}")
+                                f"프로필 {report['profile']} 자동 활성화 완료 · 백업: {report['backup']}")
                 self.open_button.configure(state='normal')
                 report_file = report.get('report_text')
                 if report_file and Path(report_file).is_file():
@@ -160,6 +151,11 @@ def packaged_resources_check():
     if not (catalog / 'catalog.json').is_file():
         raise FileNotFoundError('TranslationData/catalog.json')
     metadata = vnvkr.read_json(catalog / 'catalog.json')
+    runtime = {spec['mod']: spec for spec in metadata.get('runtime_mods', [])}
+    if not {'VNV Korean UI Strings', 'VNV Korean Radio Captions'} <= runtime.keys():
+        raise RuntimeError('Packaged Korean runtime mod declarations are missing')
+    if not metadata.get('asset_bundle', {}).get('files'):
+        raise RuntimeError('Packaged Korean texture declarations are missing')
     native = [entry for entry in metadata.get('files', []) if entry.get('kind') == 'plugin-records']
     invalid = [entry['path'] for entry in native
                if not entry.get('mappings') and not entry.get('fallback_only')]
@@ -196,6 +192,9 @@ def packaged_self_test(mo2_root):
 
 
 if __name__ == '__main__':
+    if len(sys.argv) >= 3 and sys.argv[1] == '--restore':
+        restore_backup(Path(sys.argv[2]))
+        raise SystemExit(0)
     if len(sys.argv) >= 2 and sys.argv[1] == '--package-check':
         packaged_resources_check()
         raise SystemExit(0)

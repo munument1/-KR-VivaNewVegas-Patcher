@@ -116,6 +116,7 @@ def build_fonts(installation, catalog_dir, spec, stage, seen):
                'provider': provider, 'status': kind, 'output_sha256': vnvkr.sha256(target)}
         if source:
             row['source_sha256'] = vnvkr.sha256(source)
+            row['source_path'] = str(source)
         files.append(row)
 
     font_assets = {vnvkr.virtual_path(item['path']).casefold() for item in spec['assets']}

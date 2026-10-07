@@ -70,6 +70,25 @@ def prepare(release: Path, source: Path, output: Path):
         return {'path': destination, 'payload': path.relative_to(data).as_posix(),
                 'payload_sha256': vnvkr.sha256(path)}
 
+    # v1.0.6.1 carries these trusted payloads but its SST catalog lost the
+    # metadata during rebuilding. Restore their installation declarations.
+    runtime_specs = []
+    for mod, plugins in [('VNV Korean UI Strings', ['VNVKR UI Strings.esp']),
+                         ('VNV Korean Radio Captions', [])]:
+        directory = data / 'runtime-payloads' / mod
+        files = [item(path, path.relative_to(directory).as_posix())
+                 for path in sorted(directory.rglob('*')) if path.is_file()]
+        if not files or any(not (directory / name).is_file() for name in plugins):
+            raise ValueError(f'Missing packaged Korean runtime mod: {mod}')
+        runtime_specs.append({'mod': mod, 'plugins': plugins, 'files': files})
+    catalog['runtime_mods'] = runtime_specs
+    directory = data / 'asset-payloads'
+    textures = [item(path, path.relative_to(directory).as_posix())
+                for path in sorted(directory.rglob('*')) if path.is_file() and path.suffix.lower() == '.dds']
+    if not textures:
+        raise ValueError('Missing packaged Korean terminal textures')
+    catalog['asset_bundle'] = {'default_mod': catalog['font_bundle']['default_mod'], 'files': textures}
+
     catalog['font_bundle']['runtime_patch'] = {
         **item(assets / 'tnvse.dll', 'NVSE/plugins/tnvse.dll'),
         'upstream_commit': UPSTREAM_COMMIT,

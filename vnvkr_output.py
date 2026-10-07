@@ -432,17 +432,21 @@ def destination(installation, source, virtual=None):
     if resolved.is_relative_to(installation.mods):
         relative = resolved.relative_to(installation.mods)
         return vnvkr.virtual_path((Path('mods') / relative).as_posix())
-    if resolved.is_relative_to(installation.overwrite):
-        relative = resolved.relative_to(installation.overwrite)
-        return vnvkr.virtual_path((Path('overwrite') / relative).as_posix())
     if virtual and virtual.casefold() in STARTER_PACK_MASTERS and resolved.is_relative_to(installation.data.resolve()):
-        # The four Courier's Stash pack ESMs are normally only in the real game
-        # Data directory. Never overwrite Data: publish translated copies into
-        # the enabled Fixed ESMs mod so MO2 wins them at runtime.
         return vnvkr.virtual_path(f'mods/{fixed_esm_mod(installation)}/{virtual}')
-    if resolved.is_relative_to(installation.root):
-        return vnvkr.virtual_path(resolved.relative_to(installation.root).as_posix())
-    raise ValueError(f'Source is outside the configured MO2 storage; cannot mirror it in Output: {source}')
+    # Game Data is a valid source even when StockGame is inside the MO2 root.
+    # Publish it as an MO2 overlay; never mirror the physical game directory.
+    if resolved.is_relative_to(installation.data.resolve()):
+        relative = resolved.relative_to(installation.data.resolve()).as_posix()
+        return vnvkr.virtual_path(f'mods/VNV Korean Translations/{relative}')
+    if resolved.is_relative_to(installation.overwrite):
+        relative = resolved.relative_to(installation.overwrite).as_posix()
+        if Path(relative).suffix.casefold() in {'.esm', '.esp'}:
+            # Overwrite wins over every mod: the installer removes this source
+            # only after backing it up, so the translated overlay can win.
+            return vnvkr.virtual_path(f'mods/VNV Korean Translations/{relative}')
+        return vnvkr.virtual_path(f'overwrite/{relative}')
+    raise ValueError(f'Source is outside the configured MO2 storage: {source}')
 
 
 def verified_delta(entry, catalog_dir, source):
@@ -590,7 +594,7 @@ def build_output(installation, catalog_dir, output, progress=None):
             seen.add(relative.casefold())
             target = vnvkr.contained(stage, relative)
             result = {'path': entry['path'], 'output_path': relative,
-                      'provider': chain[-1]['provider'], 'source_sha256': original_hash,
+                      'provider': chain[-1]['provider'], 'source_path': str(source), 'source_sha256': original_hash,
                       'source_updated': original_hash != entry['baseline_sha256']}
             if entry.get('auto_inherited'):
                 result.update(discovered_plugin=True, translation_source='base_dlc_sst_fallback')
@@ -762,7 +766,7 @@ def build_assets(installation, catalog_dir, spec, stage, seen, fallback_provider
         if source and vnvkr.sha256(source) != before:
             raise ValueError('Texture source changed during generation')
         files.append({'path': relative, 'output_path': output_path, 'provider': provider,
-                      'source_sha256': before, 'output_sha256': vnvkr.sha256(target),
+                      'source_sha256': before, 'source_path': str(source) if source else None, 'output_sha256': vnvkr.sha256(target),
                       'status': 'translated_texture_copy'})
     return files, {'mods_requiring_activation': sorted(activation), 'game_validation': 'not_run'}
 

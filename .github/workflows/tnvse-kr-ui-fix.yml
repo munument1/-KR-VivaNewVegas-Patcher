@@ -47,7 +47,7 @@ jobs:
         shell: pwsh
         run: |
           # test_vnvkr exercises the retired xdelta backend, absent from this EXE.
-          $patterns = @('test_fonts.py', 'test_mcm_direct.py', 'test_output.py', 'test_release_packaging.py', 'test_runtime_mods.py', 'test_xedit.py')
+          $patterns = @('test_install.py', 'test_fonts.py', 'test_mcm_direct.py', 'test_output.py', 'test_release_packaging.py', 'test_runtime_mods.py', 'test_xedit.py')
           foreach ($pattern in $patterns) {
             python -m unittest discover -s tests -p $pattern -v
             if ($LASTEXITCODE) { throw "Tests failed: $pattern" }
@@ -59,12 +59,12 @@ jobs:
           if ($LASTEXITCODE) { throw 'Patcher build failed' }
           ./dist/VNVKoreanPatcher.exe --package-check
           if ($LASTEXITCODE) { throw 'Packaged resource check failed' }
-          Copy-Item dist/VNVKoreanPatcher.exe dist/VNVKoreanPatcher-v1.0.6.2-candidate.exe
+          Copy-Item dist/VNVKoreanPatcher.exe dist/VNVKoreanPatcher-v1.0.6.3-candidate.exe
       - uses: actions/upload-artifact@v4
         with:
           name: VNV-tNVSE-KR-UI-fix-candidate
           path: |
-            dist/VNVKoreanPatcher-v1.0.6.2-candidate.exe
+            dist/VNVKoreanPatcher-v1.0.6.3-candidate.exe
             .build-resources/TranslationData/font-payloads/tnvse.dll
             .build-resources/TranslationData/font-payloads/tNVSE-71-KR-UI-source.zip
             .build-resources/TranslationData/font-payloads/tNVSE-GPL-3.0.txt
