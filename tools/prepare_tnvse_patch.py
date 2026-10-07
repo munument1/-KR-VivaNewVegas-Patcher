@@ -41,7 +41,10 @@ def prepare(release: Path, source: Path, output: Path):
     with zipfile.ZipFile(archive, 'w', zipfile.ZIP_DEFLATED, compresslevel=6) as zipout:
         for path in sorted(source.rglob('*')):
             rel = path.relative_to(source)
-            if path.is_file() and not any(part in excluded for part in rel.parts):
+            # Example fonts are not compiled into this DLL; the Korean font
+            # package already supplies its own faces and licensing notices.
+            if (path.is_file() and not any(part in excluded for part in rel.parts)
+                    and path.suffix.casefold() not in {'.ttf', '.otf', '.woff', '.woff2'}):
                 zipout.write(path, 'tNVSE/' + rel.as_posix())
         for name in ('build_tnvse_patch.ps1', 'tnvse/ui-replacement-encoding.patch'):
             path = Path(__file__).parent / name

@@ -20,3 +20,4 @@ VNV_Translation_Workspace/
 *.sst
 .build-resources/
 .tnvse-source/
+.validated-tnvse-build/

@@ -5,6 +5,7 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+  actions: read
 jobs:
   build:
     runs-on: windows-2022
@@ -16,11 +17,15 @@ jobs:
           python-version: '3.12'
       - name: Python build tools
         run: python -m pip install pyinstaller==6.22.3
+      - name: Download previously validated DLL build
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run download 37582133368 --repo munument1/-KR-VivaNewVegas-Patcher --name VNV-tNVSE-KR-UI-fix-candidate --dir .validated-tnvse-build
       - name: Build patched upstream Win32 DLL
         shell: cmd
         run: |
           call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\VsDevCmd.bat" -arch=x86 -host_arch=x64
-          powershell -NoProfile -ExecutionPolicy Bypass -File tools\build_tnvse_patch.ps1
+          powershell -NoProfile -ExecutionPolicy Bypass -File tools\build_tnvse_patch.ps1 -ReuseDll .validated-tnvse-build\.build-resources\TranslationData\font-payloads\tnvse.dll
       - name: Regression tests using actual source functions
         shell: cmd
         run: |
