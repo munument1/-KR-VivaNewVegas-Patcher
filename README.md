@@ -1,4 +1,4 @@
-# Viva New Vegas 한국어 패쳐 v1.0.7.1
+# Viva New Vegas 한국어 패쳐 v1.0.7.2
 
 `Viva New Vegas Extended` 프로필을 읽어 번역 파일과 활성화 설정이 반영된 프로필 텍스트를 **Output에만 생성**합니다. MO2와 게임 폴더에 직접 설치하거나 파일을 이동·삭제하지 않습니다.
 
@@ -6,7 +6,7 @@
 
 1. 원본 tNVSE 71과 선행 모드를 기존 가이드대로 MO2에 설치합니다.
 2. `Viva New Vegas Extended` 프로필이 있는지 확인하고 MO2를 종료합니다. GUI 패쳐는 현재 선택된 프로필과 관계없이 이 프로필을 사용합니다.
-3. `VNVKoreanPatcher-v1.0.7.1.exe`를 실행하고 `ModOrganizer.ini`가 있는 인스턴스 폴더를 선택합니다.
+3. `VNVKoreanPatcher-v1.0.7.2.exe`를 실행하고 `ModOrganizer.ini`가 있는 인스턴스 폴더를 선택합니다.
 4. **Output 생성**을 누릅니다.
 5. 기존 모드 파일과 선택한 프로필을 백업한 뒤 `Output/INSTALL.txt`에 표시된 실제 경로로 복사해 덮어씁니다. Mods 파일을 먼저 병합하고 프로필 텍스트를 마지막에 복사합니다.
 6. MO2를 다시 엽니다. 복사한 프로필 텍스트에 필요한 한국어 모드·플러그인의 활성화 상태가 반영됩니다.

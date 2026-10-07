@@ -59,28 +59,28 @@ jobs:
           if ($LASTEXITCODE) { throw 'Patcher build failed' }
           ./dist/VNVKoreanPatcher.exe --package-check
           if ($LASTEXITCODE) { throw 'Packaged resource check failed' }
-          Copy-Item dist/VNVKoreanPatcher.exe dist/VNVKoreanPatcher-v1.0.7.1.exe
+          Copy-Item dist/VNVKoreanPatcher.exe dist/VNVKoreanPatcher-v1.0.7.2.exe
       - uses: actions/upload-artifact@v4
         with:
           name: VNV-tNVSE-KR-UI-fix-candidate
           path: |
-            dist/VNVKoreanPatcher-v1.0.7.1.exe
+            dist/VNVKoreanPatcher-v1.0.7.2.exe
             .build-resources/TranslationData/font-payloads/tnvse.dll
             .build-resources/TranslationData/font-payloads/tNVSE-71-KR-UI-source.zip
             .build-resources/TranslationData/font-payloads/tNVSE-GPL-3.0.txt
             .build-resources/TranslationData/font-payloads/tNVSE-KR-UI-fix.txt
-      - name: Publish v1.0.7.1 release
+      - name: Publish v1.0.7.2 release
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           $version = python -c "import vnvkr; print(vnvkr.VERSION)"
-          if ($version -ne '1.0.7.1') { throw 'Release version mismatch' }
-          $assets = @('dist/VNVKoreanPatcher-v1.0.7.1.exe', '.build-resources/TranslationData/font-payloads/tNVSE-71-KR-UI-source.zip')
+          if ($version -ne '1.0.7.2') { throw 'Release version mismatch' }
+          $assets = @('dist/VNVKoreanPatcher-v1.0.7.2.exe', '.build-resources/TranslationData/font-payloads/tNVSE-71-KR-UI-source.zip')
           $checksums = foreach ($asset in $assets) {
             ((Get-FileHash $asset -Algorithm SHA256).Hash.ToLower() + '  ' + (Split-Path -Leaf $asset))
           }
           $checksums | Set-Content dist/SHA256SUMS.txt -Encoding utf8NoBOM
-          gh release create v1.0.7.1 @assets dist/SHA256SUMS.txt --repo munument1/-KR-VivaNewVegas-Patcher --target '${{ github.sha }}' --title 'VNV Korean Patcher v1.0.7.1' --notes-file docs/releases/v1.0.7.1.md --latest
+          gh release create v1.0.7.2 @assets dist/SHA256SUMS.txt --repo munument1/-KR-VivaNewVegas-Patcher --target '${{ github.sha }}' --title 'VNV Korean Patcher v1.0.7.2' --notes-file docs/releases/v1.0.7.2.md --latest
           if ($LASTEXITCODE) { throw 'Release publication failed' }
