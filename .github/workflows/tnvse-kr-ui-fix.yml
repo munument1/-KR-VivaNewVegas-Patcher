@@ -1,0 +1,86 @@
+name: Build and release VNV Korean patcher
+on:
+  push:
+    branches: [fix/tnvse-kr-ui, main]
+  workflow_dispatch:
+permissions:
+  contents: write
+  actions: read
+jobs:
+  build:
+    runs-on: windows-2022
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Python build tools
+        run: python -m pip install pyinstaller==6.22.3
+      - name: Download previously validated DLL build
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run download 37585314946 --repo munument1/-KR-VivaNewVegas-Patcher --name VNV-tNVSE-KR-UI-fix-candidate --dir .validated-tnvse-build
+      - name: Build patched upstream Win32 DLL
+        shell: cmd
+        run: |
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\VsDevCmd.bat" -arch=x86 -host_arch=x64
+          powershell -NoProfile -ExecutionPolicy Bypass -File tools\build_tnvse_patch.ps1 -ReuseDll .validated-tnvse-build\.build-resources\TranslationData\font-payloads\tnvse.dll
+      - name: Regression tests using actual source functions
+        shell: cmd
+        run: |
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\VsDevCmd.bat" -arch=x86 -host_arch=x64
+          python tools\tnvse\replacement_regression.py .tnvse-source build\replacement-regression.cpp
+          cl /nologo /EHsc /std:c++20 /utf-8 /Fe:build\replacement-regression.exe build\replacement-regression.cpp
+          if errorlevel 1 exit /b 1
+          build\replacement-regression.exe
+      - name: Recover verified translation/backend payloads
+        shell: pwsh
+        run: |
+          Invoke-WebRequest 'https://github.com/munument1/-KR-VivaNewVegas-Patcher/releases/download/v1.0.6.1/VNVKoreanPatcher-v1.0.6.1.exe' -OutFile base-release.exe
+          $env:PYTHONPATH = $PWD.Path
+          python tools/prepare_tnvse_patch.py --release base-release.exe --source .tnvse-source --output .build-resources
+          if ($LASTEXITCODE) { throw 'Resource preparation failed' }
+          New-Item -ItemType Directory -Force .tools/xeditlib-native | Out-Null
+          Copy-Item .build-resources/Backend/* .tools/xeditlib-native/
+      - name: Patcher regression tests
+        shell: pwsh
+        run: |
+          # test_vnvkr exercises the retired xdelta backend, absent from this EXE.
+          $patterns = @('test_install.py', 'test_fonts.py', 'test_mcm_direct.py', 'test_output.py', 'test_release_packaging.py', 'test_runtime_mods.py', 'test_xedit.py')
+          foreach ($pattern in $patterns) {
+            python -m unittest discover -s tests -p $pattern -v
+            if ($LASTEXITCODE) { throw "Tests failed: $pattern" }
+          }
+      - name: Build patcher with Korean font DLL override
+        shell: pwsh
+        run: |
+          ./tools/build_release.ps1 -Python python -Catalog .build-resources/TranslationData
+          if ($LASTEXITCODE) { throw 'Patcher build failed' }
+          ./dist/VNVKoreanPatcher.exe --package-check
+          if ($LASTEXITCODE) { throw 'Packaged resource check failed' }
+          Copy-Item dist/VNVKoreanPatcher.exe dist/VNVKoreanPatcher-v1.0.7.exe
+      - uses: actions/upload-artifact@v4
+        with:
+          name: VNV-tNVSE-KR-UI-fix-candidate
+          path: |
+            dist/VNVKoreanPatcher-v1.0.7.exe
+            .build-resources/TranslationData/font-payloads/tnvse.dll
+            .build-resources/TranslationData/font-payloads/tNVSE-71-KR-UI-source.zip
+            .build-resources/TranslationData/font-payloads/tNVSE-GPL-3.0.txt
+            .build-resources/TranslationData/font-payloads/tNVSE-KR-UI-fix.txt
+      - name: Publish v1.0.7 release
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $version = python -c "import vnvkr; print(vnvkr.VERSION)"
+          if ($version -ne '1.0.7') { throw 'Release version mismatch' }
+          $assets = @('dist/VNVKoreanPatcher-v1.0.7.exe', '.build-resources/TranslationData/font-payloads/tNVSE-71-KR-UI-source.zip')
+          $checksums = foreach ($asset in $assets) {
+            ((Get-FileHash $asset -Algorithm SHA256).Hash.ToLower() + '  ' + (Split-Path -Leaf $asset))
+          }
+          $checksums | Set-Content dist/SHA256SUMS.txt -Encoding utf8NoBOM
+          gh release create v1.0.7 @assets dist/SHA256SUMS.txt --repo munument1/-KR-VivaNewVegas-Patcher --target '${{ github.sha }}' --title 'VNV Korean Patcher v1.0.7' --notes-file docs/releases/v1.0.7.md --latest
+          if ($LASTEXITCODE) { throw 'Release publication failed' }

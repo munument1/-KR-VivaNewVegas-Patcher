@@ -11,7 +11,7 @@
 
 ## 플러그인 원본 정책
 
-게임 설치 폴더의 `Data`는 Fallout: New Vegas 설치 확인에만 사용합니다. 번역할 ESM/ESP는 현재 MO2 프로필의 winner 파일만 사용합니다. 공식 본편/DLC ESM은 활성화된 `Fixed ESMs` provider에서 읽습니다.
+게임 설치 폴더의 `Data`는 Fallout: New Vegas 설치 확인과 MO2에 별도 provider가 없는 플러그인의 원본 읽기에 사용하며 직접 덮어쓰지 않습니다. 번역할 ESM/ESP는 현재 MO2 프로필의 winner 파일만 사용합니다. 공식 본편/DLC ESM은 활성화된 `Fixed ESMs` provider에서 읽습니다.
 
 ## SST 정책
 

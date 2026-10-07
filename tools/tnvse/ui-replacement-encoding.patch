@@ -1,0 +1,66 @@
+diff --git a/tnvse/Src/font/font_manager.cpp b/tnvse/Src/font/font_manager.cpp
+index be62b09..d9f989d 100644
+--- a/tnvse/Src/font/font_manager.cpp
++++ b/tnvse/Src/font/font_manager.cpp
+@@ -261,7 +261,11 @@ namespace fonthook
+ 			}
+ 			else if (replacement[0])
+ 			{
+-				arOut += replacement;
++				const char* replacementText = replacement;
++				std::string convertedReplacement;
++				ConvertToMultiByte(replacementText, convertedReplacement,
++					HasRichTextExtraGlyphs());
++				arOut += replacementText;
+ 			}
+ 			else
+ 			{
+diff --git a/tnvse/Src/font/font_text_layout.cpp b/tnvse/Src/font/font_text_layout.cpp
+index 3ce58aa..84d01ee 100644
+--- a/tnvse/Src/font/font_text_layout.cpp
++++ b/tnvse/Src/font/font_text_layout.cpp
+@@ -87,22 +87,29 @@ namespace fonthook
+ 			if (Interface_FindTextReplacementString(varNameBuffer, parsedTextBuffer, 0x400u, isPositiveEscape)
+ 				|| Interface_TestConstantForGameSettings(varNameBuffer, parsedTextBuffer))
+ 			{
+-				UInt32 postEscapeTextLen = strlen(parsedTextBuffer);
++				std::string replacementStorage(parsedTextBuffer);
++				const char* replacementSource = replacementStorage.c_str();
++				std::string convertedReplacement;
++				if (ConvertToMultiByte(replacementSource, convertedReplacement,
++					GetExtraGlyphs(font->iFontNum) != nullptr))
++					replacementStorage = std::move(convertedReplacement);
++				char* replacementText = replacementStorage.data();
++				UInt32 postEscapeTextLen = strlen(replacementText);
+ 				int escapeSeqSizeDiff = postEscapeTextLen - totalEscapeSeqLen;
+ 
+-				if (postEscapeTextLen > 0 && parsedTextBuffer[postEscapeTextLen - 1] == '\\')
++				if (postEscapeTextLen > 0 && replacementText[postEscapeTextLen - 1] == '\\')
+ 				{
+ 					int charScanIndex = 0;
+-					while (parsedTextBuffer[charScanIndex] != '\\') ++charScanIndex;
++					while (replacementText[charScanIndex] != '\\') ++charScanIndex;
+ 
+-					std::string iconPath(&parsedTextBuffer[charScanIndex + 1]);
++					std::string iconPath(&replacementText[charScanIndex + 1]);
+ 					if (font->iFontNum == 7)
+ 						iconPath.insert(0, "glow_");
+ 					if (iconPath.size() < MAX_PATH)
+ 					{
+ 						font->AddTextIcon(iconPath.c_str());
+-						parsedTextBuffer[charScanIndex] = 1;
+-						parsedTextBuffer[charScanIndex + 1] = 0;
++						replacementText[charScanIndex] = 1;
++						replacementText[charScanIndex + 1] = 0;
+ 						postEscapeTextLen = charScanIndex + 2;
+ 						escapeSeqSizeDiff = postEscapeTextLen - totalEscapeSeqLen;
+ 					}
+@@ -112,7 +119,7 @@ namespace fonthook
+ 					textBufferSize += escapeSeqSizeDiff;
+ 					EnsureTextScratchSize(dynamicTextBuffer, textBufferSize + 1);
+ 				}
+-				memcpy(&dynamicTextBuffer[processedTextLen], parsedTextBuffer, postEscapeTextLen);
++				memcpy(&dynamicTextBuffer[processedTextLen], replacementText, postEscapeTextLen);
+ 				processedTextLen += postEscapeTextLen;
+ 				origConsumed += totalEscapeSeqLen;
+ 				srcTextIndex = srcTextIndex + totalEscapeSeqLen - 1;
