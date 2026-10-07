@@ -89,3 +89,25 @@ class ProfileTests(unittest.TestCase):
         with mock.patch.object(install.os, 'name', 'nt'), mock.patch.object(install.subprocess, 'CREATE_NO_WINDOW', 0, create=True), mock.patch.object(install.subprocess, 'run', return_value=mock.Mock(returncode=0, stdout='"ModOrganizer.exe","123"\n')):
             with self.assertRaisesRegex(RuntimeError, 'MO2를 종료'):
                 install.require_mo2_closed()
+
+
+class TargetProfileTests(ProfileTests):
+    def test_gui_targets_extended_even_when_other_profile_selected(self):
+        from vnvkr_gui import target_installation, TARGET_PROFILE
+        extended = self.profile.parent / TARGET_PROFILE
+        extended.mkdir()
+        for name in install.PROFILE_FILES:
+            (extended / name).write_bytes((self.profile / name).read_bytes())
+        inst = target_installation(self.mo2)
+        self.assertEqual(inst.profile_dir, extended)
+        report = dict(self.report, profile=TARGET_PROFILE)
+        before = {p: p.read_bytes() for p in self.profile.parent.rglob('*') if p.is_file()}
+        install.prepare_profiles(inst, self.out, report, install.profile_snapshot(inst))
+        self.assertTrue((self.out / 'profiles' / TARGET_PROFILE / 'modlist.txt').is_file())
+        self.assertEqual(before, {p: p.read_bytes() for p in self.profile.parent.rglob('*') if p.is_file()})
+        self.assertIn(str(extended), (self.out / 'INSTALL.txt').read_text(encoding='utf-8-sig'))
+
+    def test_gui_does_not_fall_back_to_selected_profile(self):
+        from vnvkr_gui import target_installation
+        with self.assertRaises(FileNotFoundError):
+            target_installation(self.mo2)

@@ -1,18 +1,18 @@
 # Viva New Vegas 한국어 패쳐 v1.0.7.1
 
-현재 MO2 프로필을 읽어 번역 파일과 활성화 설정이 반영된 프로필 텍스트를 **Output에만 생성**합니다. MO2와 게임 폴더에 직접 설치하거나 파일을 이동·삭제하지 않습니다.
+`Viva New Vegas Extended` 프로필을 읽어 번역 파일과 활성화 설정이 반영된 프로필 텍스트를 **Output에만 생성**합니다. MO2와 게임 폴더에 직접 설치하거나 파일을 이동·삭제하지 않습니다.
 
 ## 사용 방법
 
 1. 원본 tNVSE 71과 선행 모드를 기존 가이드대로 MO2에 설치합니다.
-2. 적용할 MO2 프로필을 선택하고 MO2를 종료합니다.
+2. `Viva New Vegas Extended` 프로필이 있는지 확인하고 MO2를 종료합니다. GUI 패쳐는 현재 선택된 프로필과 관계없이 이 프로필을 사용합니다.
 3. `VNVKoreanPatcher-v1.0.7.1.exe`를 실행하고 `ModOrganizer.ini`가 있는 인스턴스 폴더를 선택합니다.
 4. **Output 생성**을 누릅니다.
 5. 기존 모드 파일과 선택한 프로필을 백업한 뒤 `Output/INSTALL.txt`에 표시된 실제 경로로 복사해 덮어씁니다. Mods 파일을 먼저 병합하고 프로필 텍스트를 마지막에 복사합니다.
 6. MO2를 다시 엽니다. 복사한 프로필 텍스트에 필요한 한국어 모드·플러그인의 활성화 상태가 반영됩니다.
 
 - `Output/mods` 안의 모드 폴더 → INI에 설정된 실제 Mods 폴더
-- `Output/profiles/프로필명` 안의 `modlist.txt`, `plugins.txt`, `loadorder.txt` → 해당 실제 프로필 폴더
+- `Output/profiles/Viva New Vegas Extended` 안의 `modlist.txt`, `plugins.txt`, `loadorder.txt` → 해당 실제 프로필 폴더
 - 기존 MO2 Overwrite가 제공하던 번역 대상이 있으면 `Output/overwrite`도 생성되며, 해당 파일만 INSTALL.txt의 실제 경로에 복사합니다.
 
 기본 경로에서는 Output의 mods와 profiles 폴더를 MO2 인스턴스 폴더로 복사해 병합할 수 있습니다. 외부 Mods/Profiles 경로는 INSTALL.txt를 따르세요. 출력에 없는 기존 파일을 삭제하지 마세요. 생성 이후 모드나 프로필 설정을 바꿨다면 Output을 다시 생성하세요.
@@ -32,3 +32,5 @@ SST/XEditLib 번역, MCM JSON·Translation INI, 라디오/UI 및 터미널 텍�
 1.0.7에 추가했던 실제 MO2 자동 설치 기능을 1.0.7.1에서 제거했습니다. 이미 1.0.7로 설치했다면 기존 백업은 보관하세요. 1.0.7.1은 기존 설치를 자동 복구하거나 변경하지 않습니다.
 
 실제 게임의 GMST·단축키 표시와 라이브 MO2 적용 확인은 아직 진행하지 않았습니다.
+
+기본 VNV 경로 예시: `Output/profiles/Viva New Vegas Extended`의 세 텍스트 파일을 `C:\Modlist\VNV\profiles\Viva New Vegas Extended`에 복사해 덮어쓰세요. 외부 Profiles 경로를 설정했다면 `INSTALL.txt`에 표시된 실제 경로를 사용하세요.

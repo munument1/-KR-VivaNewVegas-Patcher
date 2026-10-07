@@ -14,6 +14,13 @@ from vnvkr_output import build_output
 from vnvkr_profiles import require_mo2_closed
 
 
+TARGET_PROFILE = "Viva New Vegas Extended"
+
+
+def target_installation(root):
+    return vnvkr.Installation(root, profile=TARGET_PROFILE)
+
+
 def program_folder():
     """Writable folder beside the user-facing executable."""
     return Path(sys.executable).resolve().parent if getattr(sys, 'frozen', False) else Path(__file__).resolve().parent
@@ -40,7 +47,8 @@ class App:
         frame.pack(fill='both', expand=True)
         frame.columnconfigure(0, weight=1)
         ttk.Label(frame, text='비바 뉴 베가스 MO2 폴더').grid(row=0, column=0, columnspan=3, sticky='w')
-        default = 'C:/Modlists/VNV' if Path('C:/Modlists/VNV/ModOrganizer.ini').is_file() else ''
+        default = next((str(path) for path in (Path('C:/Modlist/VNV'), Path('C:/Modlists/VNV'))
+                        if (path / 'ModOrganizer.ini').is_file()), '')
         self.mo2 = tk.StringVar(value=default)
         ttk.Entry(frame, textvariable=self.mo2).grid(row=1, column=0, sticky='ew', pady=(6, 16))
         self.browse = ttk.Button(frame, text='찾아보기', command=self.choose)
@@ -67,7 +75,7 @@ class App:
             messagebox.showerror(
                 '폴더 확인',
                 'mods 폴더가 아니라 ModOrganizer.ini가 있는 VNV MO2 인스턴스 폴더를 선택해주세요.\n'
-                '패쳐는 해당 INI에서 현재 프로필과 mods 경로를 읽습니다.')
+                '대상 프로필은 Viva New Vegas Extended이며, INI에서 mods와 profiles 경로를 읽습니다.')
             return
         catalog = self.resources / 'TranslationData'
         if not (catalog / 'catalog.json').is_file():
@@ -84,12 +92,12 @@ class App:
         self.open_button.configure(state='disabled')
         self.report_button.configure(state='disabled')
         self.report_file = None
-        self.status.set('선택한 프로필의 번역 파일을 준비하고 있습니다.')
+        self.status.set(f'{TARGET_PROFILE} 프로필의 번역 파일을 준비하고 있습니다.')
 
         def run():
             try:
                 require_mo2_closed()
-                installation = vnvkr.Installation(root)
+                installation = target_installation(root)
                 progress = lambda message: self.events.put(('status', message))
                 report = build_output(installation, catalog, target, progress=progress)
                 self.events.put(('done', target, report))
