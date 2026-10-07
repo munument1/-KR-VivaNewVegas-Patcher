@@ -139,7 +139,7 @@ class InstallTests(unittest.TestCase):
         next_snapshot.update({str(p): raw for p, raw in changes.items()})
         second, _, _ = install.profile_updates(self.inst, self.report, next_snapshot)
         self.assertEqual(changes, second)
-        self.assertEqual(changes[self.profile / 'modlist.txt'].decode().count('+KR Font'), 1)
+        self.assertEqual(changes[self.inst.profile_dir / 'modlist.txt'].decode().count('+KR Font'), 1)
 
 
 if __name__ == '__main__':
