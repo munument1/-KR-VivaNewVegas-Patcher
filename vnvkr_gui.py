@@ -1,4 +1,4 @@
-"""Build and install translations into the selected MO2 profile."""
+"""Prepare translations and profile text for manual copy."""
 from datetime import datetime
 import os
 from pathlib import Path
@@ -11,7 +11,7 @@ from tkinter import filedialog, messagebox, ttk
 
 import vnvkr
 from vnvkr_output import build_output
-from vnvkr_install import install_output, profile_snapshot, require_mo2_closed, restore_backup
+from vnvkr_profiles import require_mo2_closed
 
 
 def program_folder():
@@ -45,13 +45,13 @@ class App:
         ttk.Entry(frame, textvariable=self.mo2).grid(row=1, column=0, sticky='ew', pady=(6, 16))
         self.browse = ttk.Button(frame, text='찾아보기', command=self.choose)
         self.browse.grid(row=1, column=1, padx=(8, 0), pady=(6, 16))
-        self.generate = ttk.Button(frame, text='한국어 패치 설치', command=self.start)
+        self.generate = ttk.Button(frame, text='Output 생성', command=self.start)
         self.generate.grid(row=2, column=0, sticky='w')
         self.open_button = ttk.Button(frame, text='Output 폴더 열기', command=self.open_output, state='disabled')
         self.open_button.grid(row=2, column=1)
         self.report_button = ttk.Button(frame, text='패치 결과 보기', command=self.open_report, state='disabled')
         self.report_button.grid(row=2, column=2, padx=(8, 0))
-        self.status = tk.StringVar(value='MO2를 종료하고 설치하세요. 선택한 프로필의 번역 모드와 플러그인을 자동으로 활성화합니다.')
+        self.status = tk.StringVar(value='MO2를 종료하고 Output을 생성하세요. 생성 후 INSTALL.txt의 경로에 복사해 덮어쓰세요.')
         ttk.Label(frame, textvariable=self.status, wraplength=740, justify='left').grid(
             row=3, column=0, columnspan=3, sticky='w', pady=(18, 0))
         window.after(150, self.poll)
@@ -90,10 +90,8 @@ class App:
             try:
                 require_mo2_closed()
                 installation = vnvkr.Installation(root)
-                snapshot = profile_snapshot(installation)
                 progress = lambda message: self.events.put(('status', message))
                 report = build_output(installation, catalog, target, progress=progress)
-                install_output(installation, target, report, snapshot, progress=progress)
                 self.events.put(('done', target, report))
             except Exception as error:
                 self.events.put(('error', str(error)))
@@ -112,8 +110,8 @@ class App:
             self.generate.configure(state='normal')
             self.browse.configure(state='normal')
             if event[0] == 'error':
-                self.status.set('설치를 완료하지 못했습니다. 오류 내용과 백업을 확인해주세요.')
-                messagebox.showerror('설치 실패', event[1])
+                self.status.set('Output 생성에 실패했습니다. MO2와 게임 파일은 변경하지 않았습니다.')
+                messagebox.showerror('생성 실패', event[1])
             else:
                 _, self.output, report = event
                 unmatched = sum(row.get('unmatched', 0) for row in report['files'])
@@ -125,9 +123,9 @@ class App:
                     f"업데이트 미적용 {count('updated_untranslated')} · 제거 {count('removed')} · "
                     f"신규상속 {count('new_inherited')} · 신규미대응 {count('new_no_match')}"
                 )
-                self.status.set(f"{len(report['files'])}개 파일 설치 완료 · 미대응 항목 {unmatched}개 · 제외 파일 {len(report['skipped'])}개\n"
+                self.status.set(f"{len(report['files'])}개 파일 생성 완료 · 미대응 항목 {unmatched}개 · 제외 파일 {len(report['skipped'])}개\n"
                                 f"{plugin_summary}\n{self.output}\n"
-                                f"프로필 {report['profile']} 자동 활성화 완료 · 백업: {report['backup']}")
+                                f"INSTALL.txt의 경로에 모드 파일과 프로필 텍스트를 복사해주세요. 실제 설치는 아직 하지 않았습니다.")
                 self.open_button.configure(state='normal')
                 report_file = report.get('report_text')
                 if report_file and Path(report_file).is_file():
@@ -192,16 +190,6 @@ def packaged_self_test(mo2_root):
 
 
 if __name__ == '__main__':
-    if len(sys.argv) >= 3 and sys.argv[1] == '--restore':
-        window = tk.Tk()
-        window.withdraw()
-        try:
-            restore_backup(Path(sys.argv[2]))
-        except Exception as error:
-            messagebox.showerror('복구 실패', str(error))
-            raise SystemExit(1)
-        messagebox.showinfo('복구 완료', '설치 전 파일과 프로필을 복구했습니다.')
-        raise SystemExit(0)
     if len(sys.argv) >= 2 and sys.argv[1] == '--package-check':
         packaged_resources_check()
         raise SystemExit(0)

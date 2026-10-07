@@ -17,7 +17,7 @@ import tempfile
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 
-VERSION = "1.0.7"
+VERSION = "1.0.7.1"
 ROOT = Path(__file__).resolve().parent
 RESERVED = {"meta.ini", ".vnv-kr-report.json"}
 HASH = re.compile(r"[0-9a-f]{64}\Z")

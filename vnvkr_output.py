@@ -14,6 +14,7 @@ import shutil
 import tempfile
 
 import vnvkr
+import vnvkr_profiles
 import vnvkr_xedit
 import vnvkr_fonts
 from tools.loose_translation import TOKEN, decode, json_values
@@ -344,6 +345,10 @@ def make_catalog(workspace, work_dir, output, plugin_maps=None, plugin_fields=No
             metadata['output_verification'] = 'fresh_native_readback_required'
             metadata['rejected_mappings'] = rejected
         vnvkr.write_json(stage / 'catalog.json', metadata)
+        vnvkr_profiles.prepare_profiles(installation, stage, report, snapshot)
+        for row in report['profile_files']:
+            if vnvkr.sha256(vnvkr.contained(stage, row['output_path'])) != row['output_sha256']:
+                raise ValueError('Profile Output readback failed')
         stage.rename(output)
     return {'files': len(files), 'catalog': str(output)}
 
@@ -441,10 +446,6 @@ def destination(installation, source, virtual=None):
         return vnvkr.virtual_path(f'mods/VNV Korean Translations/{relative}')
     if resolved.is_relative_to(installation.overwrite):
         relative = resolved.relative_to(installation.overwrite).as_posix()
-        if Path(relative).suffix.casefold() in {'.esm', '.esp'}:
-            # Overwrite wins over every mod: the installer removes this source
-            # only after backing it up, so the translated overlay can win.
-            return vnvkr.virtual_path(f'mods/VNV Korean Translations/{relative}')
         return vnvkr.virtual_path(f'overwrite/{relative}')
     raise ValueError(f'Source is outside the configured MO2 storage: {source}')
 
@@ -470,6 +471,7 @@ def verified_delta(entry, catalog_dir, source):
 
 
 def build_output(installation, catalog_dir, output, progress=None):
+    snapshot = vnvkr_profiles.profile_snapshot(installation)
     output = output.resolve()
     installation.guard_output(output)
     # This interface prepares manual overwrite files outside MO2, never a live mod.
@@ -695,6 +697,10 @@ def build_output(installation, catalog_dir, output, progress=None):
         for row in report['files']:
             if vnvkr.sha256(vnvkr.contained(stage, row['output_path'])) != row['output_sha256']:
                 raise ValueError('Output readback failed')
+        vnvkr_profiles.prepare_profiles(installation, stage, report, snapshot)
+        for row in report['profile_files']:
+            if vnvkr.sha256(vnvkr.contained(stage, row['output_path'])) != row['output_sha256']:
+                raise ValueError('Profile Output readback failed')
         stage.rename(output)
     vnvkr.write_json(report_path, report)
     report_text_path.write_text(format_plugin_report(report), encoding='utf-8-sig')
