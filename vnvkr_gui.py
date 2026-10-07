@@ -117,7 +117,7 @@ class App:
                 count = lambda category: sum(row.get('category') == category for row in outcomes)
                 fonts = report.get('fonts', {})
                 activation = (f'\nMO2에서 "{fonts["mod"]}" 모드를 체크하고 tNVSE보다 아래에 배치해주세요.'
-                              if fonts.get('requires_activation') else '')
+                              if fonts.get('requires_activation') or fonts.get('requires_priority_check') else '')
                 extra = set(report.get('assets', {}).get('mods_requiring_activation', []))
                 runtime = report.get('runtime_mods', {})
                 extra.update(runtime.get('mods_requiring_activation', []))

@@ -18,3 +18,5 @@ VNV_Translation_Workspace/
 *.esm
 *.esl
 *.sst
+.build-resources/
+.tnvse-source/

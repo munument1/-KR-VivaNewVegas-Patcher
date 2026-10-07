@@ -96,7 +96,10 @@ def build_fonts(installation, catalog_dir, spec, stage, seen):
             if physical.is_relative_to(installation.mods):
                 provider = physical.relative_to(installation.mods).parts[0]
                 break
-    provider = provider or default_mod
+    # A patched DLL must live with our Korean font overlay, never in the base
+    # tNVSE mod. Users continue installing the upstream runtime normally.
+    runtime_patch = spec.get('runtime_patch')
+    provider = default_mod if runtime_patch else (provider or default_mod)
     prefix = f'mods/{provider}/'
     new_mod = provider not in installation.mods_enabled
     files = []
@@ -142,7 +145,7 @@ def build_fonts(installation, catalog_dir, spec, stage, seen):
         else:
             baseline = source or bundled
             raw = merge_xml(baseline.read_bytes(), planned)
-        if source and source.resolve().is_relative_to(installation.root):
+        if not runtime_patch and source and source.resolve().is_relative_to(installation.root):
             relative = source.resolve().relative_to(installation.root).as_posix()
         else:
             relative = prefix + config_path
@@ -151,11 +154,33 @@ def build_fonts(installation, catalog_dir, spec, stage, seen):
             raise ValueError('tNVSE source changed during font generation')
     for item in spec['assets']:
         write(prefix + vnvkr.virtual_path(item['path']), payload(catalog_dir, item).read_bytes(), 'font_asset')
+    if runtime_patch:
+        if runtime_patch.get('path') != 'NVSE/plugins/tnvse.dll':
+            raise ValueError('Unexpected tNVSE patch destination')
+        if not runtime_patch.get('upstream_commit') or not runtime_patch.get('source_archive'):
+            raise ValueError('tNVSE patch source metadata is missing')
+        raw = payload(catalog_dir, runtime_patch).read_bytes()
+        # Reject placeholders, x64 builds and non-DLL PE files before output.
+        import struct
+        if len(raw) < 64 or raw[:2] != b'MZ':
+            raise ValueError('tNVSE patch is not a Windows DLL')
+        pe = struct.unpack_from('<I', raw, 60)[0]
+        if (pe + 24 > len(raw) or raw[pe:pe + 4] != b'PE\0\0'
+                or struct.unpack_from('<H', raw, pe + 4)[0] != 0x14c
+                or not struct.unpack_from('<H', raw, pe + 22)[0] & 0x2000):
+            raise ValueError('tNVSE patch must be a Win32 DLL')
+        write(prefix + runtime_patch['path'], raw, 'tnvse_ui_replacement_patch')
+        for item in runtime_patch.get('notices', []):
+            relative = vnvkr.virtual_path(item['path'])
+            if not relative.startswith('NVSE/plugins/fonts/licenses/'):
+                raise ValueError('Unexpected tNVSE patch notice destination')
+            write(prefix + relative, payload(catalog_dir, item).read_bytes(), 'tnvse_patch_notice')
     note = ('VNV Korean Fonts - tNVSE\n\n'
             'Output의 mods 폴더를 VNV MO2 폴더로 복사하세요.\n'
-            + (f'MO2를 새로 고침하고 "{provider}" 모드를 체크한 뒤 tNVSE보다 아래에 배치하세요.\n' if new_mod else '')
-            + 'tNVSE 71 및 선행 모드는 별도로 설치해야 합니다. 이 묶음에는 tNVSE DLL이 없습니다.\n'
-            '처음 실행할 때 폰트 준비가 완료될 때까지 기다리세요.\n'
+            + (f'MO2를 새로 고침하고 "{provider}" 모드를 체크한 뒤 tNVSE보다 아래에 배치하세요.\n' if new_mod or runtime_patch else '')
+            + ('tNVSE 71 및 선행 모드는 기존 안내대로 설치하세요. 이 폴더의 수정 DLL이 원본 DLL보다 우선 적용되어야 합니다.\n'
+               if runtime_patch else 'tNVSE 71 및 선행 모드는 별도로 설치해야 합니다. 이 묶음에는 tNVSE DLL이 없습니다.\n')
+            + '처음 실행할 때 폰트 준비가 완료될 때까지 기다리세요.\n'
             '대화/HUD/Pip-Boy/터미널/MCM/Stewie 메뉴 표시 검증은 아직 수행하지 않았습니다.\n')
     write(prefix + 'NVSE/plugins/fonts/VNV_KR_FONT_README.txt', note.encode('utf-8-sig'), 'font_instructions')
     tnvse_installed = any(path.is_file() for path in
@@ -164,5 +189,7 @@ def build_fonts(installation, catalog_dir, spec, stage, seen):
                            *(installation.mods / name / 'NVSE/plugins/tnvse.dll'
                              for name in installation.mods_enabled)])
     return files, {'mod': provider, 'requires_activation': new_mod,
-                   'tnvse_installed': tnvse_installed, 'tnvse_dll_included': False,
+                   'tnvse_installed': tnvse_installed, 'tnvse_dll_included': bool(runtime_patch),
+                   'requires_priority_check': bool(runtime_patch),
+                   'tnvse_patch_upstream_commit': runtime_patch.get('upstream_commit') if runtime_patch else None,
                    'required_tnvse_version': 71, 'game_validation': 'not_run', 'slots': ids}

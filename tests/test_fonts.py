@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 import tempfile
+import struct
 import unittest
 import xml.etree.ElementTree as ET
 
@@ -85,6 +86,56 @@ class FontOutputTests(unittest.TestCase):
             vnvkr_output.build_output(vnvkr.Installation(self.mo2), self.catalog, out)
         self.assertFalse(out.exists())
         self.assertFalse(out.with_name('Output.report.json').exists())
+
+    def add_runtime_patch(self, machine=0x14c):
+        raw = bytearray(256)
+        raw[:2] = b'MZ'
+        struct.pack_into('<I', raw, 60, 128)
+        raw[128:132] = b'PE\0\0'
+        struct.pack_into('<H', raw, 132, machine)
+        struct.pack_into('<H', raw, 150, 0x2000)
+        dll = self.catalog / 'tnvse.dll'
+        dll.write_bytes(raw)
+        self.spec['runtime_patch'] = {
+            'path': 'NVSE/plugins/tnvse.dll', 'payload': dll.name,
+            'payload_sha256': vnvkr.sha256(dll),
+            'upstream_commit': '11c69482acc1228750a5b1aa3cae3f938d014eb1',
+            'source_archive': 'NVSE/plugins/fonts/licenses/source.zip',
+        }
+        vnvkr.write_json(self.catalog / 'catalog.json',
+                         {'schema_version': 1, 'files': [], 'font_bundle': self.spec})
+
+    def test_runtime_patch_stays_in_korean_font_folder_with_configs(self):
+        (self.mod / 'NVSE/plugins/tnvse.ini').write_bytes(b'[Multibyte]\nuiEncoding=0\n')
+        (self.mod / 'NVSE/plugins/tnvse.dll').write_bytes(b'original runtime')
+        before = {p: p.read_bytes() for p in self.mo2.rglob('*') if p.is_file()}
+        self.add_runtime_patch()
+        out = self.root / 'Output'
+        report = vnvkr_output.build_output(vnvkr.Installation(self.mo2), self.catalog, out)
+        overlay = out / 'mods/VNV Korean Fonts - tNVSE/NVSE/plugins'
+        self.assertEqual((overlay / 'tnvse.dll').read_bytes(), (self.catalog / 'tnvse.dll').read_bytes())
+        self.assertTrue((overlay / 'tnvse.ini').is_file())
+        self.assertTrue((overlay / 'tnvse_fonts.xml').is_file())
+        self.assertFalse((out / 'mods/Installed tNVSE').exists())
+        self.assertEqual(report['fonts']['mod'], 'VNV Korean Fonts - tNVSE')
+        self.assertTrue(report['fonts']['requires_priority_check'])
+        self.assertTrue(report['fonts']['tnvse_dll_included'])
+        self.assertTrue(all(p.read_bytes() == raw for p, raw in before.items()))
+
+    def test_x64_runtime_patch_publishes_no_output(self):
+        self.add_runtime_patch(machine=0x8664)
+        out = self.root / 'Output'
+        with self.assertRaisesRegex(ValueError, 'Win32 DLL'):
+            vnvkr_output.build_output(vnvkr.Installation(self.mo2), self.catalog, out)
+        self.assertFalse(out.exists())
+
+    def test_tampered_runtime_patch_publishes_no_output(self):
+        self.add_runtime_patch()
+        (self.catalog / 'tnvse.dll').write_bytes(b'broken')
+        out = self.root / 'Output'
+        with self.assertRaisesRegex(ValueError, 'integrity mismatch'):
+            vnvkr_output.build_output(vnvkr.Installation(self.mo2), self.catalog, out)
+        self.assertFalse(out.exists())
 
 
 if __name__ == '__main__':

@@ -2,6 +2,16 @@
 
 Viva New Vegas(VNV)의 **현재 MO2/VFS에서 실제로 이기는 파일**을 기준으로 한국어 Output을 만드는 패쳐입니다. 원본 VNV 설치는 직접 수정하지 않습니다.
 
+## tNVSE UI 수정 후보 빌드
+
+`fix/tnvse-kr-ui` 브랜치는 GMST와 버튼 안내 문자열을 치환한 후에도 UTF-8 → CP949 변환을 적용하는 tNVSE 수정 DLL을 포함합니다. 아직 실제 게임 검증 전인 후보 빌드입니다.
+
+1. 기존 안내대로 원본 **tNVSE 71**과 선행 모드를 설치합니다.
+2. 패쳐가 생성한 기존 `VNV Korean Fonts - tNVSE` 폴더에 수정 `NVSE/plugins/tnvse.dll`이 함께 들어갑니다.
+3. MO2에서 해당 KR Font 모드를 활성화하고 원본 tNVSE보다 아래에 배치해 DLL과 한국어 설정이 우선 적용되게 합니다.
+
+수정본은 별도 모드 폴더를 만들지 않습니다. 원본 tNVSE의 셰이더·UI 파일은 기존 설치를 사용합니다. Artaud/TIAIMM의 GPL-3.0 라이선스, 고정된 원본 커밋과 수정 소스·의존성 소스 압축본은 KR Font 폴더의 `NVSE/plugins/fonts/licenses`에 포함됩니다. 빌드 방법은 `tools/build_tnvse_patch.ps1`이며 원본 커밋은 `11c69482acc1228750a5b1aa3cae3f938d014eb1`입니다.
+
 ## v1.0.6.1 변경점
 
 v1.0.6.1은 여러 ESP/ESM을 한 번에 처리할 때 XEditLib이 재사용한 파일 핸들을 이전 플러그인 메타데이터로 잘못 해석할 수 있던 문제를 수정합니다.
