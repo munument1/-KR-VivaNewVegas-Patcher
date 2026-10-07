@@ -99,7 +99,7 @@ class FontOutputTests(unittest.TestCase):
         self.spec['runtime_patch'] = {
             'path': 'NVSE/plugins/tnvse.dll', 'payload': dll.name,
             'payload_sha256': vnvkr.sha256(dll),
-            'upstream_commit': '11c69482acc1228750a5b1aa3cae3f938d014eb1',
+            'upstream_commit': '7355fd3f2e008dc252ac484f9b376c153e584455',
             'source_archive': 'NVSE/plugins/fonts/licenses/source.zip',
         }
         vnvkr.write_json(self.catalog / 'catalog.json',

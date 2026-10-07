@@ -9,7 +9,7 @@ import zipfile
 from PyInstaller.archive.readers import CArchiveReader
 import vnvkr
 
-UPSTREAM_COMMIT = '11c69482acc1228750a5b1aa3cae3f938d014eb1'
+UPSTREAM_COMMIT = '7355fd3f2e008dc252ac484f9b376c153e584455'
 BASE_RELEASE_SHA256 = 'e5826584fcc7ae7d4df7f7a58b612baca04fb1374a9d0b4582776fb96d27f247'
 
 

@@ -10,7 +10,7 @@ Viva New Vegas(VNV)의 **현재 MO2/VFS에서 실제로 이기는 파일**을 �
 2. 패쳐가 생성한 기존 `VNV Korean Fonts - tNVSE` 폴더에 수정 `NVSE/plugins/tnvse.dll`이 함께 들어갑니다.
 3. MO2에서 해당 KR Font 모드를 활성화하고 원본 tNVSE보다 아래에 배치해 DLL과 한국어 설정이 우선 적용되게 합니다.
 
-수정본은 별도 모드 폴더를 만들지 않습니다. 원본 tNVSE의 셰이더·UI 파일은 기존 설치를 사용합니다. Artaud/TIAIMM의 GPL-3.0 라이선스, 고정된 원본 커밋과 수정 소스·의존성 소스 압축본은 KR Font 폴더의 `NVSE/plugins/fonts/licenses`에 포함됩니다. 빌드 방법은 `tools/build_tnvse_patch.ps1`이며 원본 커밋은 `11c69482acc1228750a5b1aa3cae3f938d014eb1`입니다.
+수정본은 별도 모드 폴더를 만들지 않습니다. 원본 tNVSE의 셰이더·UI 파일은 기존 설치를 사용합니다. Artaud/TIAIMM의 GPL-3.0 라이선스, 고정된 원본 커밋과 수정 소스·의존성 소스 압축본은 KR Font 폴더의 `NVSE/plugins/fonts/licenses`에 포함됩니다. 빌드 방법은 `tools/build_tnvse_patch.ps1`이며 원본 커밋은 `7355fd3f2e008dc252ac484f9b376c153e584455`입니다.
 
 ## v1.0.6.1 변경점
 

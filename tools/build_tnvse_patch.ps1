@@ -2,7 +2,7 @@ param([string]$Source = '.tnvse-source')
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
-$commit = '11c69482acc1228750a5b1aa3cae3f938d014eb1'
+$commit = '7355fd3f2e008dc252ac484f9b376c153e584455'
 if (Test-Path $Source) { throw "Use a fresh source directory: $Source" }
 git init $Source
 if ($LASTEXITCODE) { throw 'Source initialization failed' }
