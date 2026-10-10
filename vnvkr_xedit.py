@@ -208,7 +208,8 @@ def merge_plugins(installation, entries, catalog, job, source_overrides=None,
 
     for values in stats.values():
         values['verification'] = (
-            'UTF8 fresh readback; master/header/record-index + exact changed-record structure'
+            'Original-byte text-only writer; UTF8 fresh readback; '
+            'master/header/record-index + exact changed-record structure'
         )
     for source, before in original_hashes.items():
         if vnvkr.sha256(source) != before:

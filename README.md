@@ -1,36 +1,42 @@
-# Viva New Vegas 한국어 패쳐 v1.0.7.2
+# Viva New Vegas 한국어 패쳐 v1.0.7.3
 
-`Viva New Vegas Extended` 프로필을 읽어 번역 파일과 활성화 설정이 반영된 프로필 텍스트를 **Output에만 생성**합니다. MO2와 게임 폴더에 직접 설치하거나 파일을 이동·삭제하지 않습니다.
+`Viva New Vegas Extended` 프로필을 **읽기만** 하여 번역 파일을 별도 Output에 생성합니다. MO2와 게임 원본을 직접 변경하지 않으며, 프로필 파일도 생성하거나 변경하지 않습니다.
 
 ## 사용 방법
 
 1. 원본 tNVSE 71과 선행 모드를 기존 가이드대로 MO2에 설치합니다.
-2. `Viva New Vegas Extended` 프로필이 있는지 확인하고 MO2를 종료합니다. GUI 패쳐는 현재 선택된 프로필과 관계없이 이 프로필을 사용합니다.
-3. `VNVKoreanPatcher-v1.0.7.2.exe`를 실행하고 `ModOrganizer.ini`가 있는 인스턴스 폴더를 선택합니다.
+2. `Viva New Vegas Extended` 프로필이 있는지 확인하고 MO2를 종료합니다. 패쳐는 현재 선택된 프로필과 관계없이 이 프로필을 읽습니다.
+3. `VNVKoreanPatcher-v1.0.7.3.exe`를 실행하고 `ModOrganizer.ini`가 있는 인스턴스 폴더를 선택합니다.
 4. **Output 생성**을 누릅니다.
-5. 기존 모드 파일과 선택한 프로필을 백업한 뒤 `Output/INSTALL.txt`에 표시된 실제 경로로 복사해 덮어씁니다. Mods 파일을 먼저 병합하고 프로필 텍스트를 마지막에 복사합니다.
-6. MO2를 다시 엽니다. 복사한 프로필 텍스트에 필요한 한국어 모드·플러그인의 활성화 상태가 반영됩니다.
+5. 덮어쓸 기존 모드 파일을 백업한 뒤 `Output/INSTALL.txt`에 표시된 실제 Mods 경로로 번역 파일을 복사해 병합합니다.
+6. MO2를 열고 INSTALL.txt에 나오는 한국어 모드와 플러그인을 직접 활성화합니다. 한국어 폰트 모드는 원본 tNVSE보다 높은 우선순위에 둡니다.
 
 - `Output/mods` 안의 모드 폴더 → INI에 설정된 실제 Mods 폴더
-- `Output/profiles/Viva New Vegas Extended` 안의 `modlist.txt`, `plugins.txt`, `loadorder.txt` → 해당 실제 프로필 폴더
-- 기존 MO2 Overwrite가 제공하던 번역 대상이 있으면 `Output/overwrite`도 생성되며, 해당 파일만 INSTALL.txt의 실제 경로에 복사합니다.
+- 기존 MO2 Overwrite가 제공하던 번역 대상이 있으면 `Output/overwrite`도 생성됩니다. 해당 파일만 INSTALL.txt의 실제 Overwrite 경로에 복사합니다.
+- **profiles 폴더와 modlist.txt·plugins.txt·loadorder.txt는 출력하지 않습니다. 이전 Output의 프로필 파일도 복사하지 마세요.**
 
-기본 경로에서는 Output의 mods와 profiles 폴더를 MO2 인스턴스 폴더로 복사해 병합할 수 있습니다. 외부 Mods/Profiles 경로는 INSTALL.txt를 따르세요. 출력에 없는 기존 파일을 삭제하지 마세요. 생성 이후 모드나 프로필 설정을 바꿨다면 Output을 다시 생성하세요.
+출력에 없는 기존 파일·사용자 설정·프로필·세이브는 삭제하지 마세요. 모드팩 업데이트나 모드 변경 후에는 이전 Output을 재사용하지 말고 다시 생성하세요.
 
 ## 번역 파일과 배치
 
 기존 모드의 번역본은 같은 모드 경로로 출력합니다. 게임 Data에만 있는 플러그인의 번역본은 `VNV Korean Translations` 모드로, Courier's Stash 4개 ESM은 기존 Fixed ESMs 모드로 출력합니다. 게임 Data 원본은 유지합니다.
 
-필요한 한국어 폰트·UI·라디오 모드를 켜는 프로필 텍스트를 생성합니다. KR Font와 새 번역 모드는 높은 우선순위에 배치하며 기존 비활성 선택 모드는 유지합니다. 기존 활성 플러그인과 순서는 유지하고 새 UI Strings ESP를 추가합니다. 다른 프로필은 생성하지 않습니다.
+한국어 폰트·UI·라디오와 새 번역 모드는 사용자가 MO2에서 활성화합니다. 오른쪽 플러그인 목록의 `VNVKR UI Strings.esp`도 확인하세요. 기존 선택 모드의 활성화 상태와 로드 순서는 자동으로 바꾸지 않습니다. 번역된 ESP를 전부 일괄 활성화하지 마세요.
 
-수정 tNVSE DLL은 기존 `VNV Korean Fonts - tNVSE/NVSE/plugins/tnvse.dll`에 포함됩니다. 원본 tNVSE의 셰이더·UI 파일은 기존 설치를 사용합니다. GPL-3.0 라이선스와 수정 소스는 KR Font 폴더의 `NVSE/plugins/fonts/licenses`에 포함됩니다.
+수정 tNVSE DLL은 `VNV Korean Fonts - tNVSE/NVSE/plugins/tnvse.dll`에 포함됩니다. 원본 tNVSE의 셰이더·UI 파일은 기존 설치를 사용합니다. GPL-3.0 라이선스와 수정 소스는 KR Font 폴더의 `NVSE/plugins/fonts/licenses`에 포함됩니다.
 
-SST/XEditLib 번역, MCM JSON·Translation INI, 라디오/UI 및 터미널 텍스처를 포함합니다. 변경된 영문 원문은 추측 번역하지 않으며 생성 보고서에 기록합니다. 별도 Python 설치는 필요하지 않습니다.
+SST/XEditLib로 레코드와 원문을 확인한 뒤 원본 바이너리의 승인된 문자열만 치환합니다. MCM JSON·Translation INI, 라디오/UI 및 터미널 텍스처도 포함합니다. 변경된 영문 원문은 추측 번역하지 않으며 생성 보고서에 기록합니다. 별도 Python 설치는 필요하지 않습니다.
+
+## 1.0.7.2 이하 버전에서 업데이트
+
+플러그인 전체를 재저장하는 과정에서 일부 비번역 데이터가 변경될 수 있는 문제를 수정했습니다. 이제 승인된 문자열과 필요한 길이 정보만 변경하고 나머지 원본 바이트를 보존합니다.
+
+이전 Output은 사용하지 말고 새 버전으로 다시 생성하세요. 이미 이전 Output의 ESP/ESM을 설치했다면 덮어쓴 플러그인을 원래 영문 모드 파일이나 적용 전 백업으로 복구한 뒤 다시 생성해야 합니다. 새 패쳐는 이미 변경된 비번역 데이터를 자동 복구하지 않습니다.
+
+프로필 텍스트 생성 기능도 제거했습니다. 이제 번역 파일만 복사하고 한국어 모드·플러그인을 직접 활성화합니다. 이전 Output의 profiles 폴더는 복사하지 마세요.
 
 ## 1.0.7 사용자
 
-1.0.7에 추가했던 실제 MO2 자동 설치 기능을 1.0.7.1에서 제거했습니다. 이미 1.0.7로 설치했다면 기존 백업은 보관하세요. 1.0.7.1은 기존 설치를 자동 복구하거나 변경하지 않습니다.
+1.0.7에 추가했던 실제 MO2 자동 설치 기능은 1.0.7.1에서 제거했습니다. 이미 1.0.7로 설치했다면 기존 백업을 보관하세요. 새 패쳐는 기존 설치를 자동 복구하지 않습니다.
 
-실제 게임의 GMST·단축키 표시와 라이브 MO2 적용 확인은 아직 진행하지 않았습니다.
-
-기본 VNV 경로 예시: `Output/profiles/Viva New Vegas Extended`의 세 텍스트 파일을 `C:\Modlist\VNV\profiles\Viva New Vegas Extended`에 복사해 덮어쓰세요. 외부 Profiles 경로를 설정했다면 `INSTALL.txt`에 표시된 실제 경로를 사용하세요.
+실제 게임의 GMST·단축키 표시와 라이브 MO2 적용 확인은 최종 확인이 남아 있습니다.

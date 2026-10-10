@@ -15,6 +15,7 @@ import re
 import sys
 
 from vnvkr_xelib import XEditLib
+from vnvkr_plugin_text import write_plugin
 
 FLAT_SIGNATURES = {
     'CELL','WRLD','REFR','ACRE','ACTI','ARMO','ARMA','WEAP','MISC','KEYM',
@@ -161,56 +162,6 @@ def header_digest(x: XEditLib, file_handle: int) -> str:
     if isinstance(onam, list):
         onam.sort()
     return sha_obj(obj)
-
-
-def save_preserving_references(x: XEditLib, file_handle: int, target: Path, plugins: list[str]):
-    flag_path = r'Record Header\Record Flags'
-    flag = 'Quest item / Persistent reference'
-    signatures = ['REFR','PGRE','PMIS','ACHR','ACRE','PARW','PBEA','PFLA','PCON','PBAR','PHZD']
-    ranks = {p.lower(): i for i, p in enumerate(plugins)}
-    rank = ranks.get(x.name(file_handle).lower(), len(plugins))
-    suspended = {}
-
-    def suspend(ancestor: int):
-        parent = x.get_element_file(ancestor)
-        try:
-            name = x.name(parent)
-        finally:
-            x.release(parent)
-        if ranks.get(name.lower(), 1 << 30) >= rank:
-            x.release(ancestor)
-            return
-        ident = name.lower() + '|' + str(x.get_form_id(ancestor, True))
-        if ident in suspended or not x.get_flag(ancestor, flag_path, flag):
-            x.release(ancestor)
-            return
-        suspended[ident] = {'handle': ancestor, 'hash': digest(x, ancestor)}
-        x.set_flag(ancestor, flag_path, flag, False)
-
-    try:
-        for signature in signatures:
-            for record in sorted(x.get_records(file_handle, signature, True), reverse=True):
-                try:
-                    if x.is_master(record) or x.get_flag(record, flag_path, flag):
-                        continue
-                    master = x.get_master_record(record)
-                    overrides = x.get_overrides(master)
-                    suspend(master)
-                    for prior in overrides:
-                        suspend(prior)
-                finally:
-                    x.release(record)
-        x.save_file(file_handle, str(target))
-    finally:
-        for saved in suspended.values():
-            x.set_flag(saved['handle'], flag_path, flag, True)
-        failure = None
-        for saved in suspended.values():
-            if digest(x, saved['handle']) != saved['hash']:
-                failure = RuntimeError('Ancestor structure was not restored')
-            x.release(saved['handle'])
-        if failure:
-            raise failure
 
 
 def select_destination(item, direct_candidates, fallback_candidates):
@@ -387,7 +338,8 @@ def run(request: dict):
                     target = out_dir / plugin
                     if target.exists():
                         raise FileExistsError(target)
-                    save_preserving_references(x, file_handle, target, request['plugins'])
+                    write_plugin(game / 'Data' / plugin, target, changed,
+                                 x.get_master_names(file_handle))
 
                 result['files'].append({
                     'plugin': plugin,

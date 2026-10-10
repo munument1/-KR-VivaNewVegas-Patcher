@@ -5,7 +5,6 @@ from unittest import mock
 
 import vnvkr
 import vnvkr_profiles as install
-import vnvkr_output as output
 
 
 class ProfileTests(unittest.TestCase):
@@ -32,14 +31,13 @@ class ProfileTests(unittest.TestCase):
         self.snapshot = install.profile_snapshot(self.inst)
         self.out = self.root / 'Output'
         self.out.mkdir()
-        self.report = {'files': [], 'profile': 'Main', 'fonts': {'mod': 'KR Font', 'requires_priority_check': True},
+        self.report = {'files': [], 'fonts': {'mod': 'KR Font', 'requires_priority_check': True},
                        'runtime_mods': {'mods_requiring_activation': ['KR UI'], 'plugins_requiring_activation': ['KR.esp']},
-                       'output': str(self.out), 'report_json': str(self.root / 'Output.report.json'), 'report_text': str(self.root / 'Output.report.txt')}
-        Path(self.report['report_text']).write_text('report', encoding='utf-8')
+                       'output': str(self.out)}
 
     def prepare(self):
-        install.prepare_profiles(self.inst, self.out, self.report, self.snapshot)
-        return self.out / 'profiles/Main'
+        install.prepare_instructions(self.inst, self.out, self.report, self.snapshot)
+        return (self.out / 'INSTALL.txt').read_text(encoding='utf-8-sig')
 
     def test_output_only_and_source_profiles_unchanged(self):
         before = {p: p.read_bytes() for p in self.mo2.rglob('*') if p.is_file()}
@@ -47,43 +45,45 @@ class ProfileTests(unittest.TestCase):
         self.assertEqual(install.profile_snapshot(self.inst), self.snapshot)
         self.assertEqual({p: p.read_bytes() for p in self.mo2.rglob('*') if p.is_file()}, before)
         self.assertFalse((self.mods / 'KR Font').exists())
-        self.assertEqual(self.report['install_state'], 'manual_copy_required')
+        self.assertFalse((self.out / 'profiles').exists())
+        self.assertEqual(self.report['profile_files'], [])
 
-    def test_activation_and_existing_plugin_order(self):
-        out = self.prepare()
-        self.assertTrue((out / 'modlist.txt').read_text().startswith('+KR Font\n+KR UI\n'))
-        self.assertEqual((out / 'loadorder.txt').read_text().splitlines(),
-                         ['FalloutNV.esm','Other.esp','Disabled.esp','KR.esp'])
-        self.assertIn('KR.esp', (out / 'plugins.txt').read_text())
+    def test_manual_activation_instructions(self):
+        text = self.prepare()
+        self.assertIn('KR Font', text)
+        self.assertIn('KR UI', text)
+        self.assertIn('KR.esp', text)
+        self.assertIn('원본 tNVSE보다 높은', text)
+        self.assertEqual(self.report['manual_activation_mods'], ['KR Font', 'KR UI'])
+        self.assertEqual(self.report['manual_activation_plugins'], ['KR.esp'])
 
-    def test_disabled_optional_mod_is_preserved(self):
-        out = self.prepare()
-        self.assertIn('-Optional', (out / 'modlist.txt').read_text())
+    def test_disabled_and_optional_choices_are_unchanged(self):
+        self.prepare()
+        self.assertEqual((self.profile / 'modlist.txt').read_bytes(),
+                         b'# MO2\r\n+Other\r\n-KR Font\r\n-Optional\r\n+tNVSE\r\n')
+        self.assertEqual((self.profile / 'loadorder.txt').read_bytes(),
+                         b'FalloutNV.esm\r\nOther.esp\r\nDisabled.esp\r\n')
 
-    def test_data_overlay_is_enabled_in_template(self):
+    def test_data_overlay_is_manual(self):
         self.report['files'] = [{'output_path': 'mods/VNV Korean Translations/GameOnly.esp'}]
-        out = self.prepare()
-        self.assertIn('+VNV Korean Translations', (out / 'modlist.txt').read_text())
+        text = self.prepare()
+        self.assertIn('VNV Korean Translations', text)
+        self.assertFalse((self.out / 'profiles').exists())
 
     def test_changed_profile_is_rejected(self):
         (self.profile / 'modlist.txt').write_bytes(b'changed')
         with self.assertRaisesRegex(ValueError, '프로필'):
             self.prepare()
-        self.assertFalse((self.out / 'profiles').exists())
+        self.assertFalse((self.out / 'INSTALL.txt').exists())
 
     def test_external_copy_destinations_are_documented(self):
-        self.prepare()
-        text = (self.out / 'INSTALL.txt').read_text(encoding='utf-8-sig')
+        text = self.prepare()
         self.assertIn(str(self.inst.mods), text)
-        self.assertIn(str(self.inst.profile_dir), text)
-        self.assertTrue(all(Path(row['destination']).parent == self.inst.profile_dir for row in self.report['profile_files']))
+        self.assertNotIn(f'→ {self.inst.profile_dir}', text)
+        self.assertIn('이전 Output의 profiles 폴더도 복사하지', text)
 
-    def test_activation_is_idempotent(self):
-        changes, _, _ = install.profile_updates(self.inst, self.report, self.snapshot)
-        next_snapshot = dict(self.snapshot)
-        next_snapshot.update({str(p): raw for p, raw in changes.items()})
-        second, _, _ = install.profile_updates(self.inst, self.report, next_snapshot)
-        self.assertEqual(changes, second)
+    def test_update_requires_new_output(self):
+        self.assertIn('이전 Output을 재사용하지', self.prepare())
 
     def test_running_mo2_is_rejected(self):
         with mock.patch.object(install.os, 'name', 'nt'), mock.patch.object(install.subprocess, 'CREATE_NO_WINDOW', 0, create=True), mock.patch.object(install.subprocess, 'run', return_value=mock.Mock(returncode=0, stdout='"ModOrganizer.exe","123"\n')):
@@ -93,7 +93,8 @@ class ProfileTests(unittest.TestCase):
 
 class TargetProfileTests(unittest.TestCase):
     setUp = ProfileTests.setUp
-    def test_gui_targets_extended_even_when_other_profile_selected(self):
+
+    def test_gui_reads_extended_without_producing_profile_files(self):
         from vnvkr_gui import target_installation, TARGET_PROFILE
         extended = self.profile.parent / TARGET_PROFILE
         extended.mkdir()
@@ -101,14 +102,16 @@ class TargetProfileTests(unittest.TestCase):
             (extended / name).write_bytes((self.profile / name).read_bytes())
         inst = target_installation(self.mo2)
         self.assertEqual(inst.profile_dir, extended.resolve())
-        report = dict(self.report, profile=TARGET_PROFILE)
         before = {p: p.read_bytes() for p in self.profile.parent.rglob('*') if p.is_file()}
-        install.prepare_profiles(inst, self.out, report, install.profile_snapshot(inst))
-        self.assertTrue((self.out / 'profiles' / TARGET_PROFILE / 'modlist.txt').is_file())
+        install.prepare_instructions(inst, self.out, self.report, install.profile_snapshot(inst))
+        self.assertFalse((self.out / 'profiles').exists())
         self.assertEqual(before, {p: p.read_bytes() for p in self.profile.parent.rglob('*') if p.is_file()})
-        self.assertIn(str(extended.resolve()), (self.out / 'INSTALL.txt').read_text(encoding='utf-8-sig'))
 
     def test_gui_does_not_fall_back_to_selected_profile(self):
         from vnvkr_gui import target_installation
         with self.assertRaises(FileNotFoundError):
             target_installation(self.mo2)
+
+
+if __name__ == '__main__':
+    unittest.main()

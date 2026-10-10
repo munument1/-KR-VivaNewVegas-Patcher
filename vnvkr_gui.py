@@ -1,4 +1,4 @@
-"""Prepare translations and profile text for manual copy."""
+"""Prepare translation files for manual copy; profiles remain read-only."""
 from datetime import datetime
 import os
 from pathlib import Path
@@ -131,9 +131,14 @@ class App:
                     f"업데이트 미적용 {count('updated_untranslated')} · 제거 {count('removed')} · "
                     f"신규상속 {count('new_inherited')} · 신규미대응 {count('new_no_match')}"
                 )
+                activation = ''
+                if report.get('manual_activation_mods'):
+                    activation += '\nMO2 모드 활성화 확인: ' + ', '.join(report['manual_activation_mods'])
+                if report.get('manual_activation_plugins'):
+                    activation += '\n플러그인 활성화 확인: ' + ', '.join(report['manual_activation_plugins'])
                 self.status.set(f"{len(report['files'])}개 파일 생성 완료 · 미대응 항목 {unmatched}개 · 제외 파일 {len(report['skipped'])}개\n"
                                 f"{plugin_summary}\n{self.output}\n"
-                                f"INSTALL.txt의 경로에 모드 파일과 프로필 텍스트를 복사해주세요. 실제 설치는 아직 하지 않았습니다.")
+                                f"INSTALL.txt의 경로에 번역 파일만 복사해주세요. 프로필은 변경하지 않습니다.{activation}")
                 self.open_button.configure(state='normal')
                 report_file = report.get('report_text')
                 if report_file and Path(report_file).is_file():
@@ -187,11 +192,17 @@ def packaged_resources_check():
     return catalog
 
 
-def packaged_self_test(mo2_root):
+def packaged_self_test(mo2_root, output=None):
     catalog = packaged_resources_check()
+    installation = target_installation(Path(mo2_root))
+    if output is not None:
+        report = build_output(installation, catalog, output)
+        if not output.is_dir() or not report.get('files'):
+            raise RuntimeError('Packaged SST output did not complete')
+        return 0
     with tempfile.TemporaryDirectory(prefix='vnvkr-packaged-selftest-') as tmp:
         output = Path(tmp) / 'Output'
-        report = build_output(vnvkr.Installation(Path(mo2_root)), catalog, output)
+        report = build_output(installation, catalog, output)
         if not output.is_dir() or not report.get('files'):
             raise RuntimeError('Packaged SST output did not complete')
     return 0
@@ -202,7 +213,7 @@ if __name__ == '__main__':
         packaged_resources_check()
         raise SystemExit(0)
     if len(sys.argv) >= 3 and sys.argv[1] == '--self-test':
-        raise SystemExit(packaged_self_test(sys.argv[2]))
+        raise SystemExit(packaged_self_test(sys.argv[2], Path(sys.argv[3]) if len(sys.argv) >= 4 else None))
     window = tk.Tk()
     App(window)
     window.mainloop()

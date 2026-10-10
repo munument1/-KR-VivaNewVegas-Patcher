@@ -345,10 +345,6 @@ def make_catalog(workspace, work_dir, output, plugin_maps=None, plugin_fields=No
             metadata['output_verification'] = 'fresh_native_readback_required'
             metadata['rejected_mappings'] = rejected
         vnvkr.write_json(stage / 'catalog.json', metadata)
-        vnvkr_profiles.prepare_profiles(installation, stage, report, snapshot)
-        for row in report['profile_files']:
-            if vnvkr.sha256(vnvkr.contained(stage, row['output_path'])) != row['output_sha256']:
-                raise ValueError('Profile Output readback failed')
         stage.rename(output)
     return {'files': len(files), 'catalog': str(output)}
 
@@ -697,10 +693,7 @@ def build_output(installation, catalog_dir, output, progress=None):
         for row in report['files']:
             if vnvkr.sha256(vnvkr.contained(stage, row['output_path'])) != row['output_sha256']:
                 raise ValueError('Output readback failed')
-        vnvkr_profiles.prepare_profiles(installation, stage, report, snapshot)
-        for row in report['profile_files']:
-            if vnvkr.sha256(vnvkr.contained(stage, row['output_path'])) != row['output_sha256']:
-                raise ValueError('Profile Output readback failed')
+        vnvkr_profiles.prepare_instructions(installation, stage, report, snapshot)
         stage.rename(output)
     vnvkr.write_json(report_path, report)
     report_text_path.write_text(format_plugin_report(report), encoding='utf-8-sig')
