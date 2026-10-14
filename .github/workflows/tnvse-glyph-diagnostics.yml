@@ -23,3 +23,22 @@ jobs:
           Invoke-WebRequest 'https://github.com/munument1/-KR-VivaNewVegas-Patcher/releases/download/v1.0.7.3/VNVKoreanPatcher-v1.0.7.3.exe' -OutFile shipped-patcher.exe
       - name: Validate CP949 extension Hangul glyphs in bundled fonts
         run: python tools/check_tnvse_glyph_coverage.py shipped-patcher.exe
+      - name: Fetch pinned tNVSE 71 source
+        shell: pwsh
+        run: |
+          git init .tnvse-source
+          git -C .tnvse-source remote add origin https://github.com/TIAIMM/tNVSE.git
+          git -C .tnvse-source fetch --depth 1 origin 7355fd3f2e008dc252ac484f9b376c153e584455
+          if ($LASTEXITCODE) { throw "Failed to fetch upstream" }
+          git -C .tnvse-source checkout --detach FETCH_HEAD
+          if ($LASTEXITCODE) { throw "Failed to checkout upstream" }
+          git -C .tnvse-source apply tools/tnvse/ui-replacement-encoding.patch
+          if ($LASTEXITCODE) { throw "Failed to apply patch" }
+      - name: Test real UTF-8 replacement functions with UHC-only Hangul
+        shell: cmd
+        run: |
+          call "C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\Common7\\Tools\\VsDevCmd.bat" -arch=x86 -host_arch=x64
+          python tools\\tnvse\\replacement_regression.py .tnvse-source build\\replacement-regression.cpp
+          cl /nologo /EHsc /std:c++20 /utf-8 /Fe:build\\replacement-regression.exe build\\replacement-regression.cpp
+          if errorlevel 1 exit /b 1
+          build\\replacement-regression.exe
