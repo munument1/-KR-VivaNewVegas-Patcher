@@ -73,7 +73,8 @@ def prepare(release: Path, source: Path, output: Path):
             if (path.is_file() and not any(part in excluded for part in rel.parts)
                     and path.suffix.casefold() not in {'.ttf', '.otf', '.woff', '.woff2'}):
                 zipout.write(path, 'tNVSE/' + rel.as_posix())
-        for name in ('build_tnvse_patch.ps1', 'tnvse/ui-replacement-encoding.patch'):
+        for name in ('build_tnvse_patch.ps1', 'tnvse/ui-replacement-encoding.patch',
+                     'tnvse/empty-hangul-outline-fallback.patch'):
             path = Path(__file__).parent / name
             zipout.write(path, 'build/' + name)
     license_path = assets / 'tNVSE-GPL-3.0.txt'
