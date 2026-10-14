@@ -4,6 +4,7 @@ import argparse
 import hashlib
 import io
 import json
+import sys
 from pathlib import Path
 import xml.etree.ElementTree as ET
 
@@ -25,6 +26,7 @@ def get(reader, mapping, name):
 
 
 def verify(base: Path, revised: Path) -> None:
+    sys.stdout.reconfigure(encoding='utf-8')
     base_reader, new_reader = CArchiveReader(str(base)), CArchiveReader(str(revised))
     old, new = entries(base_reader), entries(new_reader)
     if set(old) != set(new):
