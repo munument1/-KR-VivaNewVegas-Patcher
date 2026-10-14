@@ -1,7 +1,7 @@
 diff --git a/tnvse/Src/font/vector/font_vector_runtime.cpp b/tnvse/Src/font/vector/font_vector_runtime.cpp
 --- a/tnvse/Src/font/vector/font_vector_runtime.cpp
 +++ b/tnvse/Src/font/vector/font_vector_runtime.cpp
-@@ -305,8 +305,37 @@
+@@ -306,7 +306,37 @@
  					continue;
  				const FT_UInt glyphIndex = FT_Get_Char_Index(face.ftFace, codePoint);
  				if (!glyphIndex)
