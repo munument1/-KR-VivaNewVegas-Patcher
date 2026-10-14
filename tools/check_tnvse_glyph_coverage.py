@@ -20,10 +20,12 @@ SAMPLES = {
 
 
 def extract(reader: CArchiveReader, name: str) -> bytes:
-    try:
-        return reader.extract(name)
-    except Exception as exc:
-        raise ValueError(f"missing packaged resource: {name}") from exc
+    matched = next((key for key in reader.toc
+                    if key.replace("\\\\", "/").casefold() == name.casefold()), None)
+    if matched is None:
+        similar = [key for key in reader.toc if "catalog" in key.casefold() or "font" in key.casefold()]
+        raise ValueError(f"missing packaged resource: {name}; similar entries: {similar[:20]}")
+    return reader.extract(matched)
 
 
 def check(release: Path) -> int:
