@@ -1,7 +1,7 @@
 name: Build and release VNV Korean patcher
 on:
   push:
-    branches: [fix/tnvse-kr-ui, main]
+    branches: [fix/tnvse-kr-ui]
   workflow_dispatch:
 permissions:
   contents: write
