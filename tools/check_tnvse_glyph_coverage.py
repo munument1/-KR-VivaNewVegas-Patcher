@@ -29,6 +29,7 @@ def extract(reader: CArchiveReader, name: str) -> bytes:
 
 
 def check(release: Path) -> int:
+    sys.stdout.reconfigure(encoding="utf-8")
     reader = CArchiveReader(str(release))
     catalog = json.loads(extract(reader, "TranslationData/catalog.json").decode("utf-8-sig"))
     bundle = catalog["font_bundle"]
