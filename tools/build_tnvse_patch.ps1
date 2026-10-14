@@ -1,4 +1,4 @@
-param([string]$Source = '.tnvse-source', [string]$ReuseDll = '')
+param([string]$Source = '.tnvse-source', [string]$ReuseDll = '', [string]$ExtraPatch = '')
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
@@ -18,6 +18,14 @@ git -C $Source apply --check $patch
 if ($LASTEXITCODE) { throw 'tNVSE source no longer matches the reviewed patch' }
 git -C $Source apply $patch
 if ($LASTEXITCODE) { throw 'tNVSE patch application failed' }
+if ($ExtraPatch) {
+    if ($ReuseDll) { throw 'Cannot reuse an old DLL when applying a new source patch' }
+    $patchPath = (Resolve-Path (Join-Path $root $ExtraPatch)).Path
+    git -C $Source apply --check $patchPath
+    if ($LASTEXITCODE) { throw 'Extra tNVSE patch no longer matches upstream source' }
+    git -C $Source apply $patchPath
+    if ($LASTEXITCODE) { throw 'Extra tNVSE patch application failed' }
+}
 if ($ReuseDll) {
     # Packaging-only rebuilds can reuse the DLL that passed the C++ regression
     # tests in run 37582133368. Never reuse it after changing the actual patch.
