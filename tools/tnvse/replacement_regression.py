@@ -70,12 +70,23 @@ int main() {
 const std::string hangul = "확인";
 const std::string cp949 = UTF8ToMultiByteStr(hangul, 949);
 assert(cp949.size() == 4 && cp949 != hangul);
+// CP949/UHC-only Korean syllables must survive every UTF-8 UI replacement.
+const std::string gecko = "\xEA\xB2\x8D\xEC\xBD\x94"; // 겍코
+const std::string cp949Gecko("\x81\xA6\xC4\xDA", 4);
+const std::string lowTrail = "\xEA\xB1\x95"; // 걕, CP949 trail 0x7A
+assert(IsValidUTF8With3ByteMin(gecko.c_str()));
+assert(UTF8ToMultiByteStr(gecko, 949) == cp949Gecko);
+assert(UTF8ToMultiByteStr(lowTrail, 949) == std::string("\x81\x7A", 2));
 FontEx font;
 gmst["sAccept"] = hangul;
 replacements["kActivate"] = "사용";
 assert(Expand("&sAccept;", font) == cp949);
 assert(Expand("[&kActivate;] &sAccept;", font) == "[" + UTF8ToMultiByteStr("사용", 949) + "] " + cp949);
 assert(Expand(cp949 + " &sAccept;", font) == cp949 + " " + cp949);
+gmst["sGecko"] = gecko;
+assert(Expand("&sGecko;", font) == cp949Gecko);
+replacements["kGecko"] = gecko;
+assert(Expand("[&kGecko;]", font) == "[" + cp949Gecko + "]");
 gmst["sAccept"] = cp949;
 assert(Expand("&sAccept;", font) == cp949);
 gmst["sAccept"] = "Accept";
