@@ -1,0 +1,41 @@
+diff --git a/tnvse/Src/font/vector/font_vector_runtime.cpp b/tnvse/Src/font/vector/font_vector_runtime.cpp
+--- a/tnvse/Src/font/vector/font_vector_runtime.cpp
++++ b/tnvse/Src/font/vector/font_vector_runtime.cpp
+@@ -305,8 +305,37 @@
+ 					continue;
+ 				const FT_UInt glyphIndex = FT_Get_Char_Index(face.ftFace, codePoint);
+ 				if (!glyphIndex)
+ 					continue;
++				// Some Korean fonts advertise every U+AC00..U+D7A3
++				// code point in their cmap, but leave the less common
++				// Hangul outlines completely empty.  FT_Get_Char_Index
++				// alone wrongly claims those glyphs and prevents a real
++				// fallback face from being consulted (e.g. U+AC8D 겍).
++				// Do not change handling for whitespace, control symbols,
++				// non-Hangul scripts, or other encodings.
++				if (codePoint >= 0xAC00u && codePoint <= 0xD7A3u)
++				{
++					if (!ConfigureRuntimeFace(face, *role.style, 1.0f, false)
++						|| FT_Load_Glyph(face.ftFace, glyphIndex, kGlyphLoadFlags))
++						continue;
++					const FT_GlyphSlot glyph = face.ftFace->glyph;
++					if (glyph->format == FT_GLYPH_FORMAT_OUTLINE)
++					{
++						FT_BBox box = {};
++						if (glyph->outline.n_contours > 0
++							&& glyph->outline.n_points > 0)
++							FT_Outline_Get_CBox(&glyph->outline, &box);
++						if (glyph->outline.n_contours <= 0
++							|| glyph->outline.n_points <= 0
++							|| box.xMin >= box.xMax || box.yMin >= box.yMax)
++						{
++							if (codePoint == 0xAC8Du)
++								gLog.FormattedMessage("tnvse_korean_glyph: ignored empty outline U+AC8D font=%u face=%u",
++									role.owner ? role.owner->config->fontId : 0, i);
++							continue;
++						}
++					}
++				}
+ 				result = { &role, &face, i, glyphIndex, codePoint };
+ 				return true;
+ 			}
