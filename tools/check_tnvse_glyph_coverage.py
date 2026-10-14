@@ -98,6 +98,28 @@ def check(release: Path) -> int:
         if missing_labels:
             missing.append(f"slot {slot}: {','.join(missing_labels)}")
 
+    # Probe every bundled font, including unused candidates for fallback.
+    for asset_path, item in sorted(assets.items()):
+        if not asset_path.endswith((".ttf", ".otf")):
+            continue
+        font_data = extract(reader, "TranslationData/" + item["payload"])
+        font = TTFont(io.BytesIO(font_data), lazy=False)
+        try:
+            cmap = font.getBestCmap() or {}
+            glyph_set = font.getGlyphSet()
+            print(f"FALLBACK CANDIDATE {asset_path}", flush=True)
+            for label, cp in SAMPLES.items():
+                glyph_name = cmap.get(cp)
+                if glyph_name is None:
+                    print(f"  {label}: absent", flush=True)
+                    continue
+                pen = BoundsPen(glyph_set)
+                glyph_set[glyph_name].draw(pen)
+                advance = font["hmtx"].metrics[glyph_name][0]
+                print(f"  {label}: glyph={glyph_name} advance={advance} bounds={pen.bounds}", flush=True)
+        finally:
+            font.close()
+
     if missing:
         print("FAILED coverage:", "; ".join(missing), flush=True)
         return 1
