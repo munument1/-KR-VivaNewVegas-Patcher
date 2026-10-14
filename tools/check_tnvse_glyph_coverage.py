@@ -7,6 +7,7 @@ import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
+from fontTools.pens.boundsPen import BoundsPen
 from fontTools.ttLib import TTFont
 from PyInstaller.archive.readers import CArchiveReader
 
@@ -66,10 +67,29 @@ def check(release: Path) -> int:
             if key not in cached:
                 f = TTFont(io.BytesIO(extract(reader, payload_name)), fontNumber=index, lazy=False)
                 try:
-                    cached[key] = set().union(*(set(table.cmap) for table in f["cmap"].tables if table.isUnicode()))
+                    glyph_set = f.getGlyphSet()
+                    cmap = f.getBestCmap() or {}
+                    per_char = {}
+                    for label, cp in SAMPLES.items():
+                        glyph_name = cmap.get(cp)
+                        if not glyph_name:
+                            continue
+                        pen = BoundsPen(glyph_set)
+                        glyph_set[glyph_name].draw(pen)
+                        advance = f["hmtx"].metrics[glyph_name][0]
+                        # cmap coverage is not enough: a missing outline or a zero
+                        # horizontal advance can render an invisible Korean glyph.
+                        drawable = (advance > 0 and pen.bounds is not None
+                                    and pen.bounds[2] > pen.bounds[0]
+                                    and pen.bounds[3] > pen.bounds[1])
+                        per_char[label] = drawable
+                        print(f"  GLYPH {label} font={path} "
+                              f"advance={advance} bounds={pen.bounds} drawable={drawable}",
+                              flush=True)
+                    cached[key] = per_char
                 finally:
                     f.close()
-            found = [label for label, cp in SAMPLES.items() if cp in cached[key]]
+            found = [label for label, cp in SAMPLES.items() if cached[key].get(label, False)]
             print(f"FONT SLOT {slot} {path} face={index}: {','.join(found) or 'none'}", flush=True)
             for label in found:
                 coverage[label] = True
