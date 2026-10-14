@@ -1,6 +1,9 @@
 name: Publish patcher to Nexus Mods
 
 on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/nexus-publish.yml']
   release:
     types: [published]
   workflow_run:
@@ -62,7 +65,9 @@ jobs:
               return;
             }
             const assetName = `VNVKoreanPatcher-${release.tag_name}.exe`;
-            const checksumsName = 'SHA256SUMS.txt';
+            const checksumsName = release.assets.some(a => a.name === 'SHA256SUMS.txt')
+              ? 'SHA256SUMS.txt'
+              : `SHA256SUMS-${release.tag_name}.txt`;
             const asset = release.assets.find(a => a.name === assetName);
             const checksums = release.assets.find(a => a.name === checksumsName);
             if (!asset || !checksums || asset.state !== 'uploaded' || checksums.state !== 'uploaded') {
