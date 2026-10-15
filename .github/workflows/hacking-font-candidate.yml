@@ -1,0 +1,57 @@
+name: Build terminal hacking font candidate
+on:
+  push:
+    branches: [fix/hacking-font-grid]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: windows-2022
+    timeout-minutes: 30
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install pyinstaller==6.22.3 fonttools==4.60.1
+      - name: Recover verified v1.0.7.4 resources
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force .base-release | Out-Null
+          gh release download v1.0.7.4 -R munument1/-KR-VivaNewVegas-Patcher -p '*.exe' --dir .base-release
+          if ($LASTEXITCODE) { throw 'Base release download failed' }
+          $exe = '.base-release/VNVKoreanPatcher-v1.0.7.4.exe'
+          if ((Get-FileHash $exe).Hash.ToLower() -ne 'a11d1a5cdeaa87142ab3949dc5e40729a54702ef641188863e5e4394aa6529f4') { throw 'Base release checksum mismatch' }
+          python tools/extract_patcher_release_resources.py $exe .build-resources
+          if ($LASTEXITCODE) { throw 'Extraction failed' }
+          python tools/fix_hacking_font.py .build-resources/TranslationData
+          if ($LASTEXITCODE) { throw 'Font update failed' }
+          New-Item -ItemType Directory -Force .tools/xeditlib-native | Out-Null
+          Copy-Item .build-resources/Backend/* .tools/xeditlib-native/
+      - name: Font and packaging regressions
+        shell: pwsh
+        run: |
+          foreach ($test in @('test_fonts.py', 'test_release_packaging.py')) {
+            python -m unittest discover -s tests -p $test -v
+            if ($LASTEXITCODE) { throw "Failed: $test" }
+          }
+      - name: Build and verify candidate
+        shell: pwsh
+        run: |
+          ./tools/build_release.ps1 -Python python -Catalog .build-resources/TranslationData -BuildRoot dist/hacking-font-build
+          if ($LASTEXITCODE) { throw 'Build failed' }
+          Copy-Item dist/hacking-font-build/VNVKoreanPatcher.exe dist/VNVKoreanPatcher-v1.0.7.5-candidate.exe
+          Start-Process -FilePath (Resolve-Path dist/VNVKoreanPatcher-v1.0.7.5-candidate.exe) -ArgumentList '--package-check' -Wait -PassThru -WindowStyle Hidden | ForEach-Object { if ($_.ExitCode) { throw 'Package check failed' } }
+          python tools/verify_hacking_font.py .base-release/VNVKoreanPatcher-v1.0.7.4.exe dist/VNVKoreanPatcher-v1.0.7.5-candidate.exe
+          if ($LASTEXITCODE) { throw 'Resource or glyph verification failed' }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: VNV-hacking-font-candidate
+          path: |
+            dist/VNVKoreanPatcher-v1.0.7.5-candidate.exe
+            .build-resources/TranslationData/font-payloads/tnvse_fonts.xml
+          if-no-files-found: error
