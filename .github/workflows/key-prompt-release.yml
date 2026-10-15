@@ -1,0 +1,40 @@
+name: Build confirmed key prompt encoding fix
+on:
+  push:
+    branches: [fix/key-prompt-encoding]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: windows-2022
+    timeout-minutes: 30
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install pyinstaller==6.22.3
+      - name: Download base release
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force .base-release | Out-Null
+          gh release download v1.0.7.5 -R munument1/VivaNewVegas-KR-Patcher -p '*.exe' --dir .base-release
+          if ($LASTEXITCODE) { throw 'Base download failed' }
+      - name: Regression tests
+        shell: pwsh
+        run: |
+          foreach ($pattern in @('test_fonts.py', 'test_release_packaging.py', 'test_runtime_mods.py', 'test_plugin_text.py')) {
+            python -m unittest discover -s tests -p $pattern -v
+            if ($LASTEXITCODE) { throw "Failed: $pattern" }
+          }
+      - name: Build and verify release
+        run: python tools/build_key_prompt_release.py --base .base-release/VNVKoreanPatcher-v1.0.7.5.exe --sha256 d081d330887b2d8f87029b4f3f975bfb2c1b6c6096b87c7f25e76fd2a124f2bd --project vnv --work .build-resources/key-prompt --output dist/key-prompt-release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: VNV-key-prompt-v1.0.7.6
+          path: dist/key-prompt-release/*
+          if-no-files-found: error
