@@ -2,7 +2,7 @@ name: VNV v1.0.7.4 Pretendard font-only build and release
 
 on:
   push:
-    branches: [fix/vnv-pretendard-font, main]
+    branches: [fix/vnv-pretendard-font]
   workflow_dispatch:
 
 permissions:
